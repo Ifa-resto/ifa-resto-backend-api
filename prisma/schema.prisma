@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+
+}
+
+// Utilisateurs avec profils étendus
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  role          UserRole
+  emailVerified Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile       Profile?
+  orders        Order[]
+  notifications Notification[]
+  ratings       Rating[]
+  cartItems     CartItem[]
+}
+
+model Profile {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  firstName   String
+  lastName    String
+  phoneNumber String?
+  avatar      String?
+  address     Address[]
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  restaurant     Restaurant?
+  deliveryPerson DeliveryPerson?
+}
+
+model Address {
+  id         String  @id @default(uuid())
+  profileId  String?
+  orderId    String? @unique
+  street     String
+  city       String
+  postalCode String
+  country    String
+  latitude   Float?
+  longitude  Float?
+  isDefault  Boolean @default(false)
+
+  profile Profile? @relation(fields: [profileId], references: [id])
+  order   Order?   @relation(fields: [orderId], references: [id])
+}
+
+model Restaurant {
+  id           String  @id @default(uuid())
+  profileId    String  @unique
+  name         String
+  description  String?
+  logo         String?
+  coverImage   String?
+  cuisine      String // Stores cuisine type as a single string, use comma-separated values if needed
+  rating       Float   @default(0)
+  isOpen       Boolean @default(true)
+  deliveryTime Int // minutes
+  deliveryFee  Float
+  minimumOrder Float
+
+  profile    Profile              @relation(fields: [profileId], references: [id])
+  categories Category[]
+  menus      MenuItem[]
+  orders     Order[]
+  schedules  RestaurantSchedule[]
+  ratings    Rating[]
+}
+
+model Category {
+  id           String  @id @default(uuid())
+  restaurantId String
+  name         String
+  description  String?
+  isActive     Boolean @default(true)
+  sortOrder    Int     @default(0)
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  menuItems  MenuItem[]
+}
+
+model MenuItem {
+  id              String  @id @default(uuid())
+  restaurantId    String
+  categoryId      String
+  name            String
+  description     String?
+  price           Float
+  discountPrice   Float?
+  image           String?
+  isAvailable     Boolean @default(true)
+  ingredients     String // Store as comma-separated values
+  allergens       String // Store as comma-separated values
+  preparationTime Int // minutes
+
+  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
+  category   Category    @relation(fields: [categoryId], references: [id])
+  orderItems OrderItem[]
+  cartItems  CartItem[]
+}
+
+model Order {
+  id                String          @id @default(uuid())
+  orderNumber       String          @unique
+  customerId        String
+  restaurantId      String
+  deliveryPersonId  String?
+  status            OrderStatus     @default(PENDING)
+  subtotal          Float
+  deliveryFee       Float
+  taxAmount         Float
+  totalAmount       Float
+  paymentMethod     PaymentMethod
+  paymentStatus     PaymentStatus   @default(PENDING)
+  deliveryAddress   Address?
+  estimatedDelivery DateTime?
+  actualDelivery    DateTime?
+  notes             String?
+  customer          User            @relation(fields: [customerId], references: [id])
+  restaurant        Restaurant      @relation(fields: [restaurantId], references: [id])
+  deliveryPerson    DeliveryPerson? @relation(fields: [deliveryPersonId], references: [id])
+  items             OrderItem[]
+  tracking          OrderTracking[]
+  payments          Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderItem {
+  id         String  @id @default(uuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  unitPrice  Float
+  totalPrice Float
+  notes      String?
+
+  order    Order    @relation(fields: [orderId], references: [id])
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+}
+
+model DeliveryPerson {
+  id            String  @id @default(uuid())
+  profileId     String  @unique
+  vehicleType   String
+  licenseNumber String?
+  isAvailable   Boolean @default(true)
+  currentLat    Float?
+  currentLng    Float?
+  rating        Float   @default(0)
+
+  profile Profile @relation(fields: [profileId], references: [id])
+  orders  Order[]
+}
+
+model OrderTracking {
+  id        String      @id @default(uuid())
+  orderId   String
+  status    OrderStatus
+  timestamp DateTime    @default(now())
+  location  String?
+  notes     String?
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String
+  amount        Float
+  method        PaymentMethod
+  status        PaymentStatus
+  transactionId String?
+  processedAt   DateTime?
+
+  order Order @relation(fields: [orderId], references: [id])
+}
+
+model Rating {
+  id           String   @id @default(uuid())
+  userId       String
+  restaurantId String
+  orderId      String?
+  rating       Int // 1-5
+  comment      String?
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id])
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model RestaurantSchedule {
+  id           String  @id @default(uuid())
+  restaurantId String
+  dayOfWeek    Int // 0-6 (Sunday-Saturday)
+  openTime     String // HH:MM format
+  closeTime    String // HH:MM format
+  isOpen       Boolean @default(true)
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+// Enums
+enum UserRole {
+  CUSTOMER
+  RESTAURANT_OWNER
+  DELIVERY_PERSON
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PREPARING
+  READY_FOR_PICKUP
+  PICKED_UP
+  ON_THE_WAY
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  PAYPAL
+  STRIPE
+  MOBILE_PAYMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  PROMOTION
+  SYSTEM
+  DELIVERY
+}
+
+// Cart items for users
+model CartItem {
+  id         String   @id @default(uuid())
+  userId     String
+  menuItemId String
+  quantity   Int      @default(1)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+}
