@@ -14,7 +14,8 @@ RUN npm ci
 COPY . .
 
 # Generate Prisma Client
-RUN npm run db:generate
+# We provide a dummy DATABASE_URL because prisma.config.ts requires it to be defined even for generation
+RUN DATABASE_URL="postgresql://ifauser:moasko00@00@ifa-ifadb-axlieg:5432/ifa" npm run db:generate
 
 # Build the application
 RUN npm run build
