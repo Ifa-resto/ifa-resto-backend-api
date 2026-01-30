@@ -9,6 +9,7 @@ import notificationRouter from '../resources/notifications/notification.routes'
 import cartRouter from '../resources/cart/routes'
 import adminRouter from '../resources/admin/routes'
 import ratingRouter from '../resources/ratings/rating.routes'
+import gamificationRouter from '../resources/gamification/gamification.routes'
 
 const router: Router = Router()
 
@@ -41,6 +42,9 @@ router.use('/api/admin', adminRouter)
 
 // Ratings routes
 router.use('/api/ratings', ratingRouter)
+
+// Gamification routes
+router.use('/api/gamification', gamificationRouter)
 
 // Health check route
 router.get('/health', (req, res) => {

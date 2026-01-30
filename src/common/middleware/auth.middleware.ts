@@ -36,7 +36,7 @@ export const authenticateJWT = async (req: AuthenticatedRequest, res: Response, 
 
     try {
       const decoded = AuthService.verifyAccessToken(token);
-      
+
       // Verify user still exists and is active
       const prisma = DBService.getClient();
       const user = await prisma.user.findUnique({
@@ -111,9 +111,15 @@ export const authorize = (roles: string[]) => {
 
       const userRole = req.user.role;
 
-      if (!roles.includes(userRole)) {
+      // SUPER_ADMIN has all ADMIN privileges
+      const effectiveRoles = [...roles];
+      if (roles.includes('ADMIN') && !roles.includes('SUPER_ADMIN')) {
+        effectiveRoles.push('SUPER_ADMIN');
+      }
+
+      if (!effectiveRoles.includes(userRole)) {
         logger.warn(
-          `Access denied for user ${req.user.email} with role ${userRole}. Required roles: ${roles.join(', ')}`
+          `Access denied for user ${req.user.email} with role ${userRole}. Required roles: ${effectiveRoles.join(', ')}`
         );
         res.status(403).json({
           success: false,

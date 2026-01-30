@@ -1,6 +1,7 @@
 import { PrismaClient, OrderStatus } from '@prisma/client';
 import DBService from '../../services/db';
 import logger from '../../common/logger';
+import { processOrderCompletion } from '../gamification/gamification.service';
 
 export class OrderService {
   private get prisma(): PrismaClient {
@@ -10,62 +11,66 @@ export class OrderService {
   async createOrder(orderData: any, customerId: string) {
     try {
       const { restaurantId, items, deliveryAddressId, notes } = orderData;
-      
+
       // Verify restaurant exists and is open
       const restaurant = await this.prisma.restaurant.findUnique({
         where: { id: restaurantId }
       });
-      
+
       if (!restaurant) {
         throw new Error('Restaurant not found');
       }
-      
+
       if (!restaurant.isOpen) {
         throw new Error('Restaurant is currently closed');
       }
-      
+
+      if (restaurant.verificationStatus !== 'VERIFIED') {
+        throw new Error('Restaurant is not verified yet');
+      }
+
       // Get customer profile ID
       const customerProfile = await this.prisma.profile.findUnique({
         where: { userId: customerId }
       });
-      
+
       if (!customerProfile) {
         throw new Error('Customer profile not found');
       }
-      
+
       // Verify delivery address belongs to customer
       const address = await this.prisma.address.findUnique({
         where: { id: deliveryAddressId }
       });
-      
+
       if (!address || address.profileId !== customerProfile.id) {
         throw new Error('Invalid delivery address');
       }
-      
+
       // Calculate order totals
       let subtotal = 0;
       const orderItemsData = [];
-      
+
       for (const item of items) {
         const menuItem = await this.prisma.menuItem.findUnique({
           where: { id: item.menuItemId }
         });
-        
+
         if (!menuItem || menuItem.restaurantId !== restaurantId) {
           throw new Error(`Menu item ${item.menuItemId} not found or does not belong to this restaurant`);
         }
-        
+
         if (!menuItem.isAvailable) {
           throw new Error(`Menu item ${menuItem.name} is not available`);
         }
-        
-        const price = menuItem.discountPrice !== null && menuItem.discountPrice < menuItem.price 
-          ? menuItem.discountPrice 
+
+        const price = menuItem.discountPrice !== null && menuItem.discountPrice < menuItem.price
+          ? menuItem.discountPrice
           : menuItem.price;
-          
+
         const totalPrice = price * item.quantity;
         subtotal += totalPrice;
-        
+
         orderItemsData.push({
           menuItemId: item.menuItemId,
           quantity: item.quantity,
@@ -74,20 +79,20 @@ export class OrderService {
           notes: item.notes || null
         });
       }
-      
+
       // Check minimum order requirement
       if (subtotal < restaurant.minimumOrder) {
         throw new Error(`Minimum order amount is ${restaurant.minimumOrder}`);
       }
-      
+
       // Calculate delivery fee
       const deliveryFee = restaurant.deliveryFee;
       const taxAmount = (subtotal + deliveryFee) * 0.1; // 10% tax
       const totalAmount = subtotal + deliveryFee + taxAmount;
-      
+
       // Generate unique order number
       const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      
+
       // Create the order
       const order = await this.prisma.order.create({
         data: {
@@ -123,7 +128,7 @@ export class OrderService {
           restaurant: true
         }
       });
-      
+
       // Create initial order tracking
       await this.prisma.orderTracking.create({
         data: {
@@ -132,7 +137,7 @@ export class OrderService {
           notes: 'Order created'
         }
       });
-      
+
       return order;
     } catch (error) {
       logger.error('Error creating order:', error);
@@ -165,16 +170,16 @@ export class OrderService {
           payments: true
         }
       });
-      
+
       if (!order) {
         return null;
       }
-      
+
       // Check permissions
       if (userRole === 'CUSTOMER' && order.customerId !== userId) {
         throw new Error('You do not have permission to view this order');
       }
-      
+
       if (userRole === 'RESTAURANT_OWNER') {
         const restaurant = await this.prisma.restaurant.findFirst({
           where: {
@@ -184,16 +189,16 @@ export class OrderService {
             }
           }
         });
-        
+
         if (!restaurant) {
           throw new Error('You do not have permission to view this order');
         }
       }
-      
+
       if (userRole === 'DELIVERY_PERSON' && order.deliveryPersonId !== userId) {
         throw new Error('You do not have permission to view this order');
       }
-      
+
       return order;
     } catch (error) {
       logger.error('Error fetching order:', error);
@@ -267,7 +272,7 @@ export class OrderService {
           createdAt: 'desc'
         }
       });
-      
+
       return orders;
     } catch (error) {
       logger.error('Error fetching user orders:', error);
@@ -301,7 +306,7 @@ export class OrderService {
           createdAt: 'desc'
         }
       });
-      
+
       return orders;
     } catch (error) {
       logger.error('Error fetching restaurant orders:', error);
@@ -337,7 +342,7 @@ export class OrderService {
           createdAt: 'desc'
         }
       });
-      
+
       return orders;
     } catch (error) {
       logger.error('Error fetching delivery person orders:', error);
@@ -348,7 +353,7 @@ export class OrderService {
   async getOrdersForAdmin(page: number = 1, limit: number = 10, filters?: { status?: string, restaurantId?: string }) {
     try {
       const skip = (page - 1) * limit;
-      
+
       const where: any = {};
       if (filters?.status) {
         where.status = filters.status as OrderStatus;
@@ -356,7 +361,7 @@ export class OrderService {
       if (filters?.restaurantId) {
         where.restaurantId = filters.restaurantId;
       }
-      
+
       const [orders, total] = await Promise.all([
         this.prisma.order.findMany({
           where,
@@ -387,7 +392,7 @@ export class OrderService {
         }),
         this.prisma.order.count({ where })
       ]);
-      
+
       return {
         orders,
         total,
@@ -413,24 +418,24 @@ export class OrderService {
           }
         }
       });
-      
+
       if (!order) {
         throw new Error('Order not found');
       }
-      
+
       // Check permissions based on user role and status
       if (userRole === 'CUSTOMER' && status !== 'CANCELLED') {
         throw new Error('Customers can only cancel orders');
       }
-      
+
       if (userRole === 'RESTAURANT_OWNER' && order.restaurant.profile.userId !== userId) {
         throw new Error('You do not have permission to update this order');
       }
-      
+
       if (userRole === 'DELIVERY_PERSON' && order.deliveryPersonId !== userId) {
         throw new Error('You do not have permission to update this order');
       }
-      
+
       // Update order status
       const updatedOrder = await this.prisma.order.update({
         where: { id: orderId },
@@ -449,7 +454,7 @@ export class OrderService {
           restaurant: true
         }
       });
-      
+
       // Create order tracking entry
       await this.prisma.orderTracking.create({
         data: {
@@ -458,7 +463,16 @@ export class OrderService {
           notes: `Status updated to ${status}`
         }
       });
-      
+
+      // Process gamification if delivered
+      if (status === 'DELIVERED') {
+        try {
+          await processOrderCompletion(order.customerId, order.id);
+        } catch (gamiError) {
+          logger.error('Error processing gamification for order:', gamiError);
+        }
+      }
+
       return updatedOrder;
     } catch (error) {
       logger.error('Error updating order status:', error);
@@ -558,15 +572,15 @@ export class OrderService {
           profile: true
         }
       });
-      
+
       if (!deliveryPerson) {
         throw new Error('Delivery person not found');
       }
-      
+
       if (!deliveryPerson.isAvailable) {
         throw new Error('Delivery person is not available');
       }
-      
+
       // Update order with delivery person
       const order = await this.prisma.order.update({
         where: { id: orderId },
@@ -593,7 +607,7 @@ export class OrderService {
           }
         }
       });
-      
+
       // Create order tracking entry
       await this.prisma.orderTracking.create({
         data: {
@@ -602,13 +616,13 @@ export class OrderService {
           notes: `Assigned to delivery person ${deliveryPerson.profile?.firstName} ${deliveryPerson.profile?.lastName}`
         }
       });
-      
+
       // Update delivery person availability
       await this.prisma.deliveryPerson.update({
         where: { id: deliveryPersonId },
         data: { isAvailable: false }
       });
-      
+
       return order;
     } catch (error) {
       logger.error('Error assigning delivery person:', error);
@@ -640,7 +654,7 @@ export class OrderService {
           }
         }
       });
-      
+
       return order;
     } catch (error) {
       logger.error('Error fetching order by number:', error);

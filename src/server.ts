@@ -1,10 +1,10 @@
+// to use env variables
+import './common/env'
+
 import * as os from 'os'
 import app from './app'
 import logger from './common/logger'
 import DBService from './services/db'
-
-// to use env variables
-import './common/env'
 
 const PORT = process.env.PORT
 

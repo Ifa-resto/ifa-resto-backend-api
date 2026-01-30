@@ -44,5 +44,8 @@ router.use(authenticateJWT, authorize(['SUPER_ADMIN']));
  *         description: Forbidden - Super Admin access required
  */
 router.get('/statistics', AdminController.getStatistics);
+router.post('/restaurants/:id/verify', AdminController.verifyRestaurant);
+router.post('/deliverers/:id/verify', AdminController.verifyDeliverer);
+router.get('/orders', AdminController.getAllOrders);
 
 export default router;

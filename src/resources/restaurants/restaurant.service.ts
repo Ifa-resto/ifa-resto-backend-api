@@ -63,7 +63,7 @@ export class RestaurantService {
   async getAllRestaurants(page: number = 1, limit: number = 10, filters?: { cuisine?: string, isOpen?: boolean }) {
     try {
       const skip = (page - 1) * limit;
-      
+
       const where: any = {};
       if (filters?.cuisine) {
         where.cuisine = {
@@ -105,6 +105,13 @@ export class RestaurantService {
 
   async updateRestaurant(id: string, data: any) {
     try {
+      if (data.isOpen) {
+        const current = await this.prisma.restaurant.findUnique({ where: { id } });
+        if (current && current.verificationStatus !== 'VERIFIED') {
+          throw new Error('Restaurant cannot be opened until it is verified by an admin');
+        }
+      }
+
       const restaurant = await this.prisma.restaurant.update({
         where: { id },
         data
@@ -123,11 +130,11 @@ export class RestaurantService {
       await this.prisma.category.deleteMany({
         where: { restaurantId: id }
       });
-      
+
       await this.prisma.menuItem.deleteMany({
         where: { restaurantId: id }
       });
-      
+
       await this.prisma.restaurantSchedule.deleteMany({
         where: { restaurantId: id }
       });
@@ -147,7 +154,7 @@ export class RestaurantService {
   async searchRestaurants(query: string, page: number = 1, limit: number = 10) {
     try {
       const skip = (page - 1) * limit;
-      
+
       const [restaurants, total] = await Promise.all([
         this.prisma.restaurant.findMany({
           where: {
@@ -193,7 +200,7 @@ export class RestaurantService {
   async getRestaurantMenu(restaurantId: string) {
     try {
       const menu = await this.prisma.category.findMany({
-        where: { 
+        where: {
           restaurantId,
           isActive: true
         },

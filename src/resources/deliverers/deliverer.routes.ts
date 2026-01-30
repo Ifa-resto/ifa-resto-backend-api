@@ -143,4 +143,32 @@ router.put('/location', authorize(['DELIVERY_PERSON']), validateBody(updateLocat
  */
 router.put('/availability', authorize(['DELIVERY_PERSON']), validateBody(updateAvailabilitySchema), DelivererController.updateAvailability);
 
+/**
+ * @swagger
+ * /api/deliverers/documents:
+ *   put:
+ *     summary: Upload verification documents
+ *     description: Upload document URLs for deliverer verification
+ *     tags: [Deliverers]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - documents
+ *             properties:
+ *               documents:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *     responses:
+ *       200:
+ *         description: Documents uploaded successfully
+ */
+router.put('/documents', authorize(['DELIVERY_PERSON']), DelivererController.uploadDocuments);
+
 export default router;

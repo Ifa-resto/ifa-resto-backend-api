@@ -42,7 +42,7 @@ export class DelivererController {
     try {
       const { id } = req.params;
       const deliverer = await delivererService.getDelivererById(id);
-      
+
       if (!deliverer) {
         res.status(404).json({
           success: false,
@@ -50,7 +50,7 @@ export class DelivererController {
         });
         return;
       }
-      
+
       const data = {
         id: deliverer.id,
         firstName: (deliverer as any).profile?.firstName,
@@ -137,6 +137,35 @@ export class DelivererController {
       res.status(500).json({
         success: false,
         message: 'Failed to update availability'
+      });
+    }
+  }
+
+  // Upload documents (for onboarding/verification)
+  static async uploadDocuments(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id || '';
+      const { documents } = req.body;
+
+      if (!documents || !Array.isArray(documents)) {
+        res.status(400).json({
+          success: false,
+          message: 'Documents are required and must be an array'
+        });
+        return;
+      }
+
+      await delivererService.uploadDocuments(userId, documents);
+
+      res.json({
+        success: true,
+        message: 'Documents uploaded successfully and sent for review'
+      });
+    } catch (error) {
+      logger.error('Error uploading deliverer documents:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to upload documents'
       });
     }
   }

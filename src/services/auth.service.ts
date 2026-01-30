@@ -34,6 +34,8 @@ export class AuthService {
     firstName: string
     lastName: string
     phone?: string
+    vehicleType?: string
+    documents?: string[]
   }) {
     const prisma = DBService.getClient()
 
@@ -51,17 +53,29 @@ export class AuthService {
       data: {
         email: userData.email,
         password: hashedPassword,
-        role: userData.role as UserRole, // Fix: cast to UserRole type
+        role: userData.role as UserRole,
         profile: {
           create: {
             firstName: userData.firstName,
             lastName: userData.lastName,
-            phoneNumber: userData.phone, // Fix: use correct field name
+            phoneNumber: userData.phone,
           },
         },
       },
       include: { profile: true },
     })
+
+    // If it's a delivery person, create the DeliveryPerson record
+    if (userData.role === 'DELIVERY_PERSON' && user.profile) {
+      await prisma.deliveryPerson.create({
+        data: {
+          profileId: user.profile.id,
+          vehicleType: userData.vehicleType || 'MOTO',
+          documents: userData.documents || [],
+          verificationStatus: userData.documents && userData.documents.length > 0 ? 'REVIEWING' : 'PENDING'
+        }
+      })
+    }
 
     // Remove password from response
     const { password, ...userWithoutPassword } = user

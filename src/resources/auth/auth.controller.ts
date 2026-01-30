@@ -10,7 +10,7 @@ export class AuthController {
    */
   static async register(req: Request, res: Response, next: NextFunction) {
     try {
-      const { email, password, role = 'CUSTOMER', firstName, lastName, phone } = req.body
+      const { email, password, role = 'CUSTOMER', firstName, lastName, phone, vehicleType, documents } = req.body
 
       const user = await AuthService.register({
         email,
@@ -19,6 +19,8 @@ export class AuthController {
         firstName,
         lastName,
         phone,
+        vehicleType,
+        documents,
       })
 
       res.status(201).json({

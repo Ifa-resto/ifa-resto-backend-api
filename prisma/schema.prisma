@@ -1,97 +1,94 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-
 }
 
-// Utilisateurs avec profils étendus
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
+  id            String               @id @default(uuid())
+  email         String               @unique
   password      String
   role          UserRole
-  emailVerified Boolean   @default(false)
-  isActive      Boolean   @default(true)
+  emailVerified Boolean              @default(false)
+  isActive      Boolean              @default(true)
   lastLogin     DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  profile       Profile?
-  orders        Order[]
-  notifications Notification[]
-  ratings       Rating[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
   cartItems     CartItem[]
+  gamification  GamificationProfile?
+  notifications Notification[]
+  orders        Order[]
+  profile       Profile?
+  ratings       Rating[]
+  badges        UserBadge[]
+  rewards       UserReward[]
 }
 
 model Profile {
-  id          String    @id @default(uuid())
-  userId      String    @unique
-  firstName   String
-  lastName    String
-  phoneNumber String?
-  avatar      String?
-  address     Address[]
-
+  id             String          @id @default(uuid())
+  userId         String          @unique
+  firstName      String
+  lastName       String
+  phoneNumber    String?
+  avatar         String?
+  address        Address[]
+  deliveryPerson DeliveryPerson?
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   restaurant     Restaurant?
-  deliveryPerson DeliveryPerson?
 }
 
 model Address {
-  id         String  @id @default(uuid())
+  id         String   @id @default(uuid())
   profileId  String?
-  orderId    String? @unique
+  orderId    String?  @unique
   street     String
   city       String
   postalCode String
   country    String
   latitude   Float?
   longitude  Float?
-  isDefault  Boolean @default(false)
-
-  profile Profile? @relation(fields: [profileId], references: [id])
-  order   Order?   @relation(fields: [orderId], references: [id])
+  isDefault  Boolean  @default(false)
+  order      Order?   @relation(fields: [orderId], references: [id])
+  profile    Profile? @relation(fields: [profileId], references: [id])
 }
 
 model Restaurant {
-  id           String  @id @default(uuid())
-  profileId    String  @unique
-  name         String
-  description  String?
-  logo         String?
-  coverImage   String?
-  cuisine      String // Stores cuisine type as a single string, use comma-separated values if needed
-  rating       Float   @default(0)
-  isOpen       Boolean @default(true)
-  deliveryTime Int // minutes
-  deliveryFee  Float
-  minimumOrder Float
-
-  profile    Profile              @relation(fields: [profileId], references: [id])
-  categories Category[]
-  menus      MenuItem[]
-  orders     Order[]
-  schedules  RestaurantSchedule[]
-  ratings    Rating[]
+  id                 String               @id @default(uuid())
+  profileId          String               @unique
+  name               String
+  description        String?
+  logo               String?
+  coverImage         String?
+  cuisine            String
+  rating             Float                @default(0)
+  verificationStatus VerificationStatus   @default(PENDING)
+  isOpen             Boolean              @default(true)
+  deliveryTime       Int
+  deliveryFee        Float
+  minimumOrder       Float
+  categories         Category[]
+  menus              MenuItem[]
+  orders             Order[]
+  ratings            Rating[]
+  profile            Profile              @relation(fields: [profileId], references: [id])
+  schedules          RestaurantSchedule[]
 }
 
 model Category {
-  id           String  @id @default(uuid())
+  id           String     @id @default(uuid())
   restaurantId String
   name         String
   description  String?
-  isActive     Boolean @default(true)
-  sortOrder    Int     @default(0)
-
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
-  menuItems  MenuItem[]
+  isActive     Boolean    @default(true)
+  sortOrder    Int        @default(0)
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  menuItems    MenuItem[]
 }
 
 model MenuItem {
-  id              String  @id @default(uuid())
+  id              String      @id @default(uuid())
   restaurantId    String
   categoryId      String
   name            String
@@ -99,15 +96,14 @@ model MenuItem {
   price           Float
   discountPrice   Float?
   image           String?
-  isAvailable     Boolean @default(true)
-  ingredients     String // Store as comma-separated values
-  allergens       String // Store as comma-separated values
-  preparationTime Int // minutes
-
-  restaurant Restaurant  @relation(fields: [restaurantId], references: [id])
-  category   Category    @relation(fields: [categoryId], references: [id])
-  orderItems OrderItem[]
-  cartItems  CartItem[]
+  isAvailable     Boolean     @default(true)
+  ingredients     String
+  allergens       String
+  preparationTime Int
+  cartItems       CartItem[]
+  category        Category    @relation(fields: [categoryId], references: [id])
+  restaurant      Restaurant  @relation(fields: [restaurantId], references: [id])
+  orderItems      OrderItem[]
 }
 
 model Order {
@@ -123,46 +119,45 @@ model Order {
   totalAmount       Float
   paymentMethod     PaymentMethod
   paymentStatus     PaymentStatus   @default(PENDING)
-  deliveryAddress   Address?
   estimatedDelivery DateTime?
   actualDelivery    DateTime?
   notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deliveryAddress   Address?
   customer          User            @relation(fields: [customerId], references: [id])
-  restaurant        Restaurant      @relation(fields: [restaurantId], references: [id])
   deliveryPerson    DeliveryPerson? @relation(fields: [deliveryPersonId], references: [id])
+  restaurant        Restaurant      @relation(fields: [restaurantId], references: [id])
   items             OrderItem[]
   tracking          OrderTracking[]
   payments          Payment[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model OrderItem {
-  id         String  @id @default(uuid())
+  id         String   @id @default(uuid())
   orderId    String
   menuItemId String
   quantity   Int
   unitPrice  Float
   totalPrice Float
   notes      String?
-
-  order    Order    @relation(fields: [orderId], references: [id])
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  order      Order    @relation(fields: [orderId], references: [id])
 }
 
 model DeliveryPerson {
-  id            String  @id @default(uuid())
-  profileId     String  @unique
-  vehicleType   String
-  licenseNumber String?
-  isAvailable   Boolean @default(true)
-  currentLat    Float?
-  currentLng    Float?
-  rating        Float   @default(0)
-
-  profile Profile @relation(fields: [profileId], references: [id])
-  orders  Order[]
+  id                 String             @id @default(uuid())
+  profileId          String             @unique
+  vehicleType        String
+  licenseNumber      String?
+  verificationStatus VerificationStatus @default(PENDING)
+  documents          String[]           @default([])
+  isAvailable        Boolean            @default(true)
+  currentLat         Float?
+  currentLng         Float?
+  rating             Float              @default(0)
+  profile            Profile            @relation(fields: [profileId], references: [id])
+  orders             Order[]
 }
 
 model OrderTracking {
@@ -172,8 +167,7 @@ model OrderTracking {
   timestamp DateTime    @default(now())
   location  String?
   notes     String?
-
-  order Order @relation(fields: [orderId], references: [id])
+  order     Order       @relation(fields: [orderId], references: [id])
 }
 
 model Payment {
@@ -184,21 +178,19 @@ model Payment {
   status        PaymentStatus
   transactionId String?
   processedAt   DateTime?
-
-  order Order @relation(fields: [orderId], references: [id])
+  order         Order         @relation(fields: [orderId], references: [id])
 }
 
 model Rating {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   userId       String
   restaurantId String
   orderId      String?
-  rating       Int // 1-5
+  rating       Int
   comment      String?
-  createdAt    DateTime @default(now())
-
-  user       User       @relation(fields: [userId], references: [id])
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  createdAt    DateTime   @default(now())
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  user         User       @relation(fields: [userId], references: [id])
 }
 
 model Notification {
@@ -209,22 +201,92 @@ model Notification {
   type      NotificationType
   isRead    Boolean          @default(false)
   createdAt DateTime         @default(now())
-
-  user User @relation(fields: [userId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
 }
 
 model RestaurantSchedule {
-  id           String  @id @default(uuid())
+  id           String     @id @default(uuid())
   restaurantId String
-  dayOfWeek    Int // 0-6 (Sunday-Saturday)
-  openTime     String // HH:MM format
-  closeTime    String // HH:MM format
-  isOpen       Boolean @default(true)
-
-  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  dayOfWeek    Int
+  openTime     String
+  closeTime    String
+  isOpen       Boolean    @default(true)
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 }
 
-// Enums
+model CartItem {
+  id         String   @id @default(uuid())
+  userId     String
+  menuItemId String
+  quantity   Int      @default(1)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GamificationProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  points           Int      @default(0)
+  level            Int      @default(1)
+  currentStreak    Int      @default(0)
+  longestStreak    Int      @default(0)
+  lastActivityDate DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Badge {
+  id             String      @id @default(uuid())
+  name           String      @unique
+  description    String
+  imageUrl       String?
+  criteria       String
+  pointsRequired Int         @default(0)
+  userBadges     UserBadge[]
+}
+
+model UserBadge {
+  id       String   @id @default(uuid())
+  userId   String
+  badgeId  String
+  earnedAt DateTime @default(now())
+  badge    Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+}
+
+model Reward {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String
+  costPoints  Int
+  type        RewardType
+  value       Float
+  isActive    Boolean      @default(true)
+  userRewards UserReward[]
+}
+
+model UserReward {
+  id        String       @id @default(uuid())
+  userId    String
+  rewardId  String
+  status    RewardStatus @default(AVAILABLE)
+  createdAt DateTime     @default(now())
+  usedAt    DateTime?
+  reward    Reward       @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum VerificationStatus {
+  PENDING
+  REVIEWING
+  VERIFIED
+  REJECTED
+}
+
 enum UserRole {
   CUSTOMER
   RESTAURANT_OWNER
@@ -268,16 +330,15 @@ enum NotificationType {
   DELIVERY
 }
 
-// Cart items for users
-model CartItem {
-  id         String   @id @default(uuid())
-  userId     String
-  menuItemId String
-  quantity   Int      @default(1)
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+enum RewardType {
+  DISCOUNT_PERCENTAGE
+  DISCOUNT_FIXED_AMOUNT
+  FREE_DELIVERY
+  FREE_ITEM
+}
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+enum RewardStatus {
+  AVAILABLE
+  USED
+  EXPIRED
 }
