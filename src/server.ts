@@ -6,7 +6,8 @@ import app from './app'
 import logger from './common/logger'
 import DBService from './services/db'
 
-const PORT = process.env.PORT
+const PORT = process.env.PORT || 3000
+const HOST = '0.0.0.0'
 
 async function startServer() {
   try {
@@ -18,7 +19,7 @@ async function startServer() {
     }
 
     // Start server
-    app.listen(PORT, () => {
+    app.listen(Number(PORT), HOST, () => {
       logger.info(`up and running in ${process.env.NODE_ENV || 'development'} @: ${os.hostname()} on port ${PORT}`)
     })
   } catch (error) {
