@@ -1,5 +1,5 @@
 import Redis from 'ioredis'
-import { logger } from '../common/logger'
+import logger from '../common/logger'
 
 class CacheService {
   private redis: Redis
