@@ -93,6 +93,21 @@ router.post('/', CartController.addToCart);
 
 /**
  * @swagger
+ * /api/cart/checkout:
+ *   post:
+ *     summary: Checkout cart
+ *     description: Create order from cart
+ *     tags: [Cart]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Success
+ */
+router.post('/checkout', CartController.checkout);
+
+/**
+ * @swagger
  * /api/cart/{cartItemId}:
  *   put:
  *     summary: Update cart item
