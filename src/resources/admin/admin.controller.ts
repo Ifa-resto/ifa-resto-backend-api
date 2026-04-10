@@ -86,6 +86,69 @@ class AdminController {
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+  // Audit Logs
+  async getAuditLogs(req: Request, res: Response): Promise<void> {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const result = await adminService.getAuditLogs(limit);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Disputes
+  async getDisputes(req: Request, res: Response): Promise<void> {
+    try {
+      const status = req.query.status as any;
+      const result = await adminService.getDisputes(status);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async updateDispute(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { status, resolution } = req.body;
+      const result = await adminService.updateDisputeStatus(id, status, resolution);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Config & Commissions
+  async updateCommission(req: Request, res: Response): Promise<void> {
+    try {
+      const { restaurantId } = req.params;
+      const { rate } = req.body;
+      const result = await adminService.updateRestaurantCommission(restaurantId, rate);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getPlatformConfig(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await adminService.getPlatformConfig();
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async updatePlatformConfig(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await adminService.updatePlatformConfig(req.body);
+      res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
 }
 
 export default new AdminController();
