@@ -38,7 +38,7 @@ class UserController {
         })
         return
       }
-      
+
       logger.error('Error in createUser controller:', error)
       next(error)
     }
@@ -151,7 +151,7 @@ class UserController {
         })
         return
       }
-      
+
       logger.error('Error in updateUser controller:', error)
       res.status(500).json({
         success: false,
@@ -186,7 +186,7 @@ class UserController {
         })
         return
       }
-      
+
       logger.error('Error in deleteUser controller:', error)
       res.status(500).json({
         success: false,
@@ -274,7 +274,7 @@ class UserController {
         })
         return
       }
-      
+
       logger.error('Error in updatePassword controller:', error)
       res.status(500).json({
         success: false,
@@ -366,7 +366,7 @@ class UserController {
         })
         return
       }
-      
+
       logger.error('Error in updateDeliveryAddress controller:', error)
       res.status(500).json({
         success: false,
@@ -402,7 +402,7 @@ class UserController {
         })
         return
       }
-      
+
       logger.error('Error in deleteDeliveryAddress controller:', error)
       res.status(500).json({
         success: false,
@@ -438,8 +438,43 @@ class UserController {
         })
         return
       }
-      
+
       logger.error('Error in setDefaultAddress controller:', error)
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+      })
+    }
+  }
+
+  async deleteProfile(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.id
+
+      if (!userId) {
+        res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        })
+        return
+      }
+
+      await userService.deleteUser(userId)
+
+      res.status(200).json({
+        success: true,
+        message: 'User profile deleted successfully',
+      })
+    } catch (error: any) {
+      if (error.message === 'User not found') {
+        res.status(404).json({
+          success: false,
+          message: error.message,
+        })
+        return
+      }
+
+      logger.error('Error in deleteProfile controller:', error)
       res.status(500).json({
         success: false,
         message: 'Internal server error',
