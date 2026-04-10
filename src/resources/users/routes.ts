@@ -143,6 +143,32 @@ router.put('/profile', validate(updateUserSchema), UserController.updateUser)
 
 /**
  * @swagger
+ * /api/users/profile:
+ *   delete:
+ *     summary: Delete user profile
+ *     description: Delete authenticated user's account
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User profile deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       401:
+ *         description: Unauthorized
+ */
+router.delete('/profile', UserController.deleteProfile);
+
+/**
+ * @swagger
  * /api/users/profile/password:
  *   put:
  *     summary: Update user password
