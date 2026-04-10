@@ -20,83 +20,40 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-export const authenticateJWT = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const authenticateJWT = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.authorization
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      res.status(401).json({
-        success: false,
-        message: 'Access token required',
-      });
-      return;
-    }
+    if (authHeader) {
+      const token = authHeader.split(' ')[1]
 
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+      try {
+        const payload = AuthService.verifyAccessToken(token)
+        const prisma = DBService.getClient()
 
-    try {
-      const decoded = AuthService.verifyAccessToken(token);
+        const user = await prisma.user.findUnique({
+          where: { id: payload.userId },
+          select: { id: true, email: true, role: true, emailVerified: true, isActive: true },
+        })
 
-      // Verify user still exists and is active
-      const prisma = DBService.getClient();
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        include: { profile: true },
-      });
+        if (!user || !user.isActive) {
+          return res.sendStatus(403)
+        }
 
-      if (!user) {
-        res.status(401).json({
-          success: false,
-          message: 'User not found',
-        });
-        return;
+        // Add user to request object
+        ;(req as any).user = user
+        next()
+      } catch (err) {
+        return res.sendStatus(403)
       }
-
-      if (!user.isActive) {
-        res.status(401).json({
-          success: false,
-          message: 'Account is deactivated',
-        });
-        return;
-      }
-
-      // Attach user info to request
-      req.user = {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        emailVerified: user.emailVerified,
-        profile: user.profile || undefined,
-      };
-
-      next();
-    } catch (jwtError: any) {
-      if (jwtError.message === 'Access token expired') {
-        res.status(401).json({
-          success: false,
-          message: 'Token expired',
-        });
-        return;
-      }
-
-      if (jwtError.message === 'Invalid access token') {
-        res.status(401).json({
-          success: false,
-          message: 'Invalid token',
-        });
-        return;
-      }
-
-      throw jwtError;
+    } else {
+      res.sendStatus(401)
     }
   } catch (error) {
-    logger.error('Error in JWT authentication middleware:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-    });
+    logger.error('Auth middleware error', error)
+    res.sendStatus(500)
   }
-};
+}
 
 export const authorize = (roles: string[]) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
