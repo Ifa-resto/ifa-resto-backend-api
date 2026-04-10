@@ -79,9 +79,12 @@ export class AuthService {
 
     // Remove password from response
     const { password, ...userWithoutPassword } = user
+    
+    // Generate tokens for automatic login
+    const tokens = this.generateTokenPair(user)
 
     logger.info(`New user registered: ${user.email}`)
-    return userWithoutPassword
+    return { ...tokens, user: userWithoutPassword }
   }
 
   /**
