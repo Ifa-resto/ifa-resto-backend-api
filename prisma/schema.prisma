@@ -24,6 +24,8 @@ model User {
   ratings       Rating[]
   badges        UserBadge[]
   rewards       UserReward[]
+  auditLogs     AuditLog[]
+  disputes      Dispute[]
 }
 
 model Profile {
@@ -64,6 +66,7 @@ model Restaurant {
   cuisine            String
   rating             Float                @default(0)
   verificationStatus VerificationStatus   @default(PENDING)
+  commissionRate     Float                @default(15.0)
   isOpen             Boolean              @default(true)
   deliveryTime       Int
   deliveryFee        Float
@@ -131,6 +134,7 @@ model Order {
   items             OrderItem[]
   tracking          OrderTracking[]
   payments          Payment[]
+  disputes          Dispute[]
 }
 
 model OrderItem {
@@ -341,4 +345,44 @@ enum RewardStatus {
   AVAILABLE
   USED
   EXPIRED
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  resource  String
+  details   String?
+  ip        String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Dispute {
+  id          String        @id @default(uuid())
+  orderId     String
+  userId      String // Reporter
+  reason      String
+  description String
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  order       Order         @relation(fields: [orderId], references: [id])
+  user        User          @relation(fields: [userId], references: [id])
+}
+
+model PlatformConfig {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
+
+enum DisputeStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  REJECTED
 }
