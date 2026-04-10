@@ -19,13 +19,17 @@ export class AdminService {
         totalRestaurants,
         totalOrders,
         activeDeliverers,
-        ordersToday
+        ordersToday,
+        pendingDisputes,
+        cancelledOrdersToday
       ] = await Promise.all([
         this.prisma.user.count(),
         this.prisma.restaurant.count(),
         this.prisma.order.count(),
         this.prisma.deliveryPerson.count({ where: { isAvailable: true, verificationStatus: 'VERIFIED' } }),
-        this.prisma.order.count({ where: { createdAt: { gte: todayStart } } })
+        this.prisma.order.count({ where: { createdAt: { gte: todayStart } } }),
+        this.prisma.dispute.count({ where: { status: 'OPEN' } }),
+        this.prisma.order.count({ where: { status: 'CANCELLED', updatedAt: { gte: todayStart } } })
       ]);
 
       // Calculate total revenue and monthly revenue
@@ -33,19 +37,34 @@ export class AdminService {
         where: {
           status: 'DELIVERED',
         },
-        select: {
-          totalAmount: true,
-          createdAt: true,
-        },
+        include: {
+          restaurant: { select: { commissionRate: true } }
+        }
       });
 
-      const totalRevenue = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-      const monthlyRevenue = completedOrders
-        .filter(o => o.createdAt >= monthStart)
-        .reduce((sum, order) => sum + order.totalAmount, 0);
-      const dailyRevenue = completedOrders
-        .filter(o => o.createdAt >= todayStart)
-        .reduce((sum, order) => sum + order.totalAmount, 0);
+      let totalRevenue = 0;
+      let totalCommissions = 0;
+      let monthlyRevenue = 0;
+      let dailyRevenue = 0;
+      let totalDeliveryTime = 0;
+      let deliveredCount = completedOrders.length;
+
+      completedOrders.forEach(order => {
+        totalRevenue += order.totalAmount;
+        const commission = (order.totalAmount * (order.restaurant.commissionRate || 15)) / 100;
+        totalCommissions += commission;
+
+        if (order.createdAt >= monthStart) monthlyRevenue += order.totalAmount;
+        if (order.createdAt >= todayStart) dailyRevenue += order.totalAmount;
+
+        if (order.actualDelivery && order.createdAt) {
+          totalDeliveryTime += (order.actualDelivery.getTime() - order.createdAt.getTime());
+        }
+      });
+
+      const avgDeliveryTime = deliveredCount > 0
+        ? Math.round(totalDeliveryTime / deliveredCount / 60000) // in minutes
+        : 0;
 
       // Get Top Restaurants by order count
       const topRestaurants = await this.prisma.restaurant.findMany({
@@ -77,10 +96,14 @@ export class AdminService {
         totalRestaurants,
         totalOrders,
         totalRevenue,
+        totalCommissions,
         monthlyRevenue,
         dailyRevenue,
         activeDeliverers,
         ordersToday,
+        pendingDisputes,
+        cancelledOrdersToday,
+        avgDeliveryTime,
         topRestaurants: topRestaurants.map(r => ({
           id: r.id,
           name: r.name,
@@ -167,6 +190,63 @@ export class AdminService {
         deliveryPerson: { include: { profile: true } }
       }
     });
+  }
+
+  // Audit Logs
+  async getAuditLogs(limit: number = 50) {
+    return this.prisma.auditLog.findMany({
+      take: limit,
+      orderBy: { createdAt: 'desc' },
+      include: { user: { select: { email: true } } }
+    });
+  }
+
+  async createAuditLog(userId: string, action: string, resource: string, details?: string, ip?: string) {
+    return this.prisma.auditLog.create({
+      data: { userId, action, resource, details, ip }
+    });
+  }
+
+  // Disputes
+  async getDisputes(status?: 'OPEN' | 'INVESTIGATING' | 'RESOLVED' | 'REJECTED') {
+    return this.prisma.dispute.findMany({
+      where: status ? { status } : {},
+      include: {
+        order: { include: { restaurant: true, customer: { select: { email: true } } } },
+        user: { select: { email: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async updateDisputeStatus(id: string, status: 'OPEN' | 'INVESTIGATING' | 'RESOLVED' | 'REJECTED', resolution?: string) {
+    return this.prisma.dispute.update({
+      where: { id },
+      data: { status, resolution }
+    });
+  }
+
+  // Configuration & Commissions
+  async updateRestaurantCommission(restaurantId: string, rate: number) {
+    return this.prisma.restaurant.update({
+      where: { id: restaurantId },
+      data: { commissionRate: rate }
+    });
+  }
+
+  async getPlatformConfig() {
+    return this.prisma.platformConfig.findMany();
+  }
+
+  async updatePlatformConfig(settings: Record<string, any>) {
+    const updates = Object.entries(settings).map(([key, value]) => {
+      return this.prisma.platformConfig.upsert({
+        where: { key },
+        update: { value: value.toString() },
+        create: { key, value: value.toString() }
+      });
+    });
+    return Promise.all(updates);
   }
 }
 
