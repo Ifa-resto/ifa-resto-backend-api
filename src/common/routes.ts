@@ -13,6 +13,15 @@ import gamificationRouter from '../resources/gamification/gamification.routes'
 
 const router: Router = Router()
 
+// Import RestaurantController for cuisines and promos
+import { RestaurantController } from '../resources/restaurants/restaurant.controller';
+
+// Cuisines routes
+router.get('/api/cuisines', RestaurantController.getCuisines);
+
+// Promos routes
+router.get('/api/promos', RestaurantController.getPromos);
+
 // Authentication routes
 router.use('/api/auth', authRouter)
 
