@@ -34,7 +34,7 @@ export class RestaurantController {
     try {
       const { id } = req.params;
       const restaurant = await restaurantService.getRestaurantById(id);
-      
+
       if (!restaurant) {
         res.status(404).json({
           success: false,
@@ -42,7 +42,7 @@ export class RestaurantController {
         });
         return;
       }
-      
+
       res.json({
         success: true,
         data: restaurant
@@ -63,14 +63,14 @@ export class RestaurantController {
       const limit = parseInt(req.query.limit as string) || 10;
       const cuisine = req.query.cuisine as string;
       const isOpen = req.query.isOpen !== undefined ? req.query.isOpen === 'true' : undefined;
-      
+
       const filters = {
         cuisine: cuisine || undefined,
         isOpen: isOpen
       };
 
       const result = await restaurantService.getAllRestaurants(page, limit, filters);
-      
+
       res.json({
         success: true,
         data: result
@@ -84,12 +84,34 @@ export class RestaurantController {
     }
   }
 
+  // Get cuisines
+  static async getCuisines(req: Request, res: Response): Promise<void> {
+    try {
+      const cuisines = await restaurantService.getCuisines();
+      res.json({ success: true, data: cuisines });
+    } catch (error) {
+      logger.error('Error fetching cuisines:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch cuisines' });
+    }
+  }
+
+  // Get promos
+  static async getPromos(req: Request, res: Response): Promise<void> {
+    try {
+      const promos = await restaurantService.getPromos();
+      res.json({ success: true, data: promos });
+    } catch (error) {
+      logger.error('Error fetching promos:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch promos' });
+    }
+  }
+
   // Update restaurant
   static async updateRestaurant(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const restaurant = await restaurantService.updateRestaurant(id, req.body);
-      
+
       res.json({
         success: true,
         data: restaurant
@@ -108,7 +130,7 @@ export class RestaurantController {
     try {
       const { id } = req.params;
       await restaurantService.deleteRestaurant(id);
-      
+
       res.json({
         success: true,
         message: 'Restaurant deleted successfully'
@@ -128,7 +150,7 @@ export class RestaurantController {
       const { query } = req.query;
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
-      
+
       if (!query) {
         res.status(400).json({
           success: false,
@@ -138,7 +160,7 @@ export class RestaurantController {
       }
 
       const result = await restaurantService.searchRestaurants(query as string, page, limit);
-      
+
       res.json({
         success: true,
         data: result
@@ -156,7 +178,7 @@ export class RestaurantController {
   static async getRestaurantMenu(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      
+
       // Check if restaurant exists
       const restaurant = await restaurantService.getRestaurantById(id);
       if (!restaurant) {
@@ -166,9 +188,9 @@ export class RestaurantController {
         });
         return;
       }
-      
+
       const menu = await restaurantService.getRestaurantMenu(id);
-      
+
       res.json({
         success: true,
         data: menu
@@ -187,7 +209,7 @@ export class RestaurantController {
     try {
       const { restaurantId, categoryId } = req.params;
       const menuItemData = req.body;
-      
+
       // Verify the restaurant belongs to the owner
       const restaurant = await restaurantService.getRestaurantById(restaurantId);
       if (!restaurant || restaurant.profile?.userId !== req.user?.id) {
@@ -197,9 +219,9 @@ export class RestaurantController {
         });
         return;
       }
-      
+
       const menuItem = await restaurantService.addMenuItem(restaurantId, categoryId, menuItemData);
-      
+
       res.status(201).json({
         success: true,
         data: menuItem
@@ -218,7 +240,7 @@ export class RestaurantController {
     try {
       const { restaurantId, menuItemId } = req.params;
       const menuItemData = req.body;
-      
+
       // Verify the restaurant belongs to the owner
       const restaurant = await restaurantService.getRestaurantById(restaurantId);
       if (!restaurant || restaurant.profile?.userId !== req.user?.id) {
@@ -228,9 +250,9 @@ export class RestaurantController {
         });
         return;
       }
-      
+
       const menuItem = await restaurantService.updateMenuItem(restaurantId, menuItemId, menuItemData);
-      
+
       res.json({
         success: true,
         data: menuItem
@@ -248,7 +270,7 @@ export class RestaurantController {
   static async deleteMenuItem(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { restaurantId, menuItemId } = req.params;
-      
+
       // Verify the restaurant belongs to the owner
       const restaurant = await restaurantService.getRestaurantById(restaurantId);
       if (!restaurant || restaurant.profile?.userId !== req.user?.id) {
@@ -258,9 +280,9 @@ export class RestaurantController {
         });
         return;
       }
-      
+
       await restaurantService.deleteMenuItem(restaurantId, menuItemId);
-      
+
       res.json({
         success: true,
         message: 'Menu item deleted successfully'
@@ -279,7 +301,7 @@ export class RestaurantController {
     try {
       const { restaurantId } = req.params;
       const categoryData = req.body;
-      
+
       // Verify the restaurant belongs to the owner
       const restaurant = await restaurantService.getRestaurantById(restaurantId);
       if (!restaurant || restaurant.profile?.userId !== req.user?.id) {
@@ -289,9 +311,9 @@ export class RestaurantController {
         });
         return;
       }
-      
+
       const category = await restaurantService.addCategory(restaurantId, categoryData);
-      
+
       res.status(201).json({
         success: true,
         data: category
