@@ -103,7 +103,7 @@ export const addToCart = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
     const { menuItemId, quantity, notes } = req.body;
-    
+
     const cartItem = await cartService.addToCart(userId, menuItemId, quantity, notes);
     res.status(201).json({
       success: true,
@@ -172,7 +172,7 @@ export const updateCartItem = async (req: Request, res: Response) => {
     const userId = (req as any).user.id;
     const { cartItemId } = req.params;
     const { quantity, notes } = req.body;
-    
+
     const cartItem = await cartService.updateCartItem(userId, cartItemId, quantity, notes);
     res.json({
       success: true,
@@ -224,7 +224,7 @@ export const removeFromCart = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
     const { cartItemId } = req.params;
-    
+
     const result = await cartService.removeFromCart(userId, cartItemId);
     res.json(result);
   } catch (error: any) {
@@ -262,7 +262,7 @@ export const removeFromCart = async (req: Request, res: Response) => {
 export const clearCart = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    
+
     const result = await cartService.clearCart(userId);
     res.json(result);
   } catch (error: any) {
@@ -306,7 +306,7 @@ export const clearCart = async (req: Request, res: Response) => {
 export const getCartTotal = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    
+
     const total = await cartService.getCartTotal(userId);
     res.json({
       success: true,
@@ -316,6 +316,43 @@ export const getCartTotal = async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       message: error.message || 'Error calculating cart total'
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /api/cart/checkout:
+ *   post:
+ *     summary: Checkout cart
+ *     description: Create an order from the cart
+ *     tags: [Cart]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Checkout successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 orderId:
+ *                   type: string
+ *       400:
+ *         description: Error
+ */
+export const checkout = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user.id;
+    const result = await cartService.checkout(userId);
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: error.message || 'Error during checkout'
     });
   }
 };
