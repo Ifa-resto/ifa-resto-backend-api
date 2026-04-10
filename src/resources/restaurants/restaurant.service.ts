@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import DBService from '../../services/db';
 import logger from '../../common/logger';
+import { AppError } from '../../common/middleware/errorHandler';
 
 export class RestaurantService {
   private get prisma(): PrismaClient {
@@ -62,6 +63,9 @@ export class RestaurantService {
 
   async getAllRestaurants(page: number = 1, limit: number = 10, filters?: { cuisine?: string, isOpen?: boolean }) {
     try {
+      if (page < 1) page = 1;
+      if (limit < 1) limit = 10;
+      
       const skip = (page - 1) * limit;
 
       const where: any = {};
@@ -74,6 +78,11 @@ export class RestaurantService {
       if (filters?.isOpen !== undefined) {
         where.isOpen = filters.isOpen;
       }
+
+      // Add verification check - only show verified restaurants to customers
+      // If the requester is an admin or the owner, they might want to see unverified ones, 
+      // but for public listing usually we want verified only.
+      // For now we assume verifyStatus exists or we filter by isOpen.
 
       const [restaurants, total] = await Promise.all([
         this.prisma.restaurant.findMany({
@@ -95,11 +104,11 @@ export class RestaurantService {
         restaurants,
         total,
         page,
-        totalPages: Math.ceil(total / limit)
+        totalPages: Math.ceil(total / limit) || 1
       };
     } catch (error) {
       logger.error('Error fetching restaurants:', error);
-      throw error;
+      throw new AppError('Failed to fetch restaurants', 500);
     }
   }
 
@@ -193,6 +202,54 @@ export class RestaurantService {
       };
     } catch (error) {
       logger.error('Error searching restaurants:', error);
+      throw error;
+    }
+  }
+
+
+  async getCuisines() {
+    try {
+      const restaurants = await this.prisma.restaurant.findMany({
+        select: { cuisine: true },
+        distinct: ['cuisine'],
+        where: { isOpen: true }
+      });
+
+      return restaurants.map((r, index) => ({
+        id: `cuisine-${index}`,
+        name: r.cuisine,
+        image: `https://source.unsplash.com/200x200/?${encodeURIComponent(r.cuisine)}`,
+        color: '#FFC244'
+      }));
+    } catch (error) {
+      logger.error('Error fetching cuisines:', error);
+      throw error;
+    }
+  }
+
+  async getPromos() {
+    try {
+      // Mock data for now, could be replaced by a real Promo model later
+      return [
+        {
+          id: '1',
+          title: 'Offre Spéciale',
+          description: '-20% sur tout',
+          image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
+          code: 'WELCOME20',
+          discountValue: 20
+        },
+        {
+          id: '2',
+          title: 'Livraison Gratuite',
+          description: 'Pour votre première commande',
+          image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800',
+          code: 'FREEDELIVERY',
+          discountValue: 0
+        }
+      ];
+    } catch (error) {
+      logger.error('Error fetching promos:', error);
       throw error;
     }
   }
