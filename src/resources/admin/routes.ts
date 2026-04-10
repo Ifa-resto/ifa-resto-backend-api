@@ -48,4 +48,18 @@ router.post('/restaurants/:id/verify', AdminController.verifyRestaurant);
 router.post('/deliverers/:id/verify', AdminController.verifyDeliverer);
 router.get('/orders', AdminController.getAllOrders);
 
+// Audit & Security
+router.get('/audit-logs', AdminController.getAuditLogs);
+
+// Disputes & Support
+router.get('/disputes', AdminController.getDisputes);
+router.put('/disputes/:id', AdminController.updateDispute);
+
+// Finance & Comms
+router.put('/restaurants/:restaurantId/commission', AdminController.updateCommission);
+
+// Platform Configuration
+router.get('/config', AdminController.getPlatformConfig);
+router.put('/config', AdminController.updatePlatformConfig);
+
 export default router;
