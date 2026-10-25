@@ -4,7 +4,8 @@ import { authenticateJWT, authorize } from '../../common/middleware/auth.middlew
 import {
   validate,
   registerSchema,
-  updateUserSchema
+  updateUserSchema,
+  updateOwnProfileSchema,
 } from '../../common/validation/schemas'
 
 const router: Router = Router()
@@ -63,7 +64,7 @@ const router: Router = Router()
  *       409:
  *         description: Email already exists
  */
-router.post('/', validate(registerSchema), UserController.createUser)
+router.post('/', authenticateJWT, authorize(['ADMIN']), validate(registerSchema), UserController.createUser)
 
 // Routes protégées (authentification requise)
 router.use(authenticateJWT)
@@ -139,7 +140,7 @@ router.get('/profile', UserController.getUserProfile)
  *       401:
  *         description: Unauthorized
  */
-router.put('/profile', validate(updateUserSchema), UserController.updateUser)
+router.put('/profile', validate(updateOwnProfileSchema), UserController.updateOwnProfile)
 
 /**
  * @swagger

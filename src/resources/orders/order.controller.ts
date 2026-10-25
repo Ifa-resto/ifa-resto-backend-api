@@ -97,7 +97,7 @@ export class OrderController {
         if (deliveryPerson) {
           orders = await orderService.getOrdersForDeliveryPerson(deliveryPerson.id);
         }
-      } else if (userRole === 'ADMIN') {
+      } else if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
         const status = req.query.status as string;
@@ -155,7 +155,7 @@ export class OrderController {
       const userId = req.user?.id;
       
       // Verify admin access
-      if (req.user?.role !== 'ADMIN') {
+      if (req.user?.role !== 'ADMIN' && req.user?.role !== 'SUPER_ADMIN') {
         res.status(403).json({
           success: false,
           message: 'Forbidden: Admin access required'
@@ -179,11 +179,11 @@ export class OrderController {
   }
 
   // Get order by order number
-  static async getOrderByNumber(req: Request, res: Response): Promise<void> {
+  static async getOrderByNumber(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { orderNumber } = req.params;
       
-      const order = await orderService.getOrderByOrderNumber(orderNumber);
+      const order = await orderService.getOrderByOrderNumber(orderNumber, req.user?.id, req.user?.role);
       
       if (!order) {
         res.status(404).json({

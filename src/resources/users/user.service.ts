@@ -233,7 +233,8 @@ export class UserService {
     try {
       // Get current user with password
       const user = await this.prisma.user.findUnique({
-        where: { id: userId }
+        where: { id: userId },
+        omit: { password: false }
       });
       
       if (!user) {
@@ -273,10 +274,24 @@ export class UserService {
         throw new Error('User profile not found');
       }
       
-      // Create address
+      const { street, city, postalCode, country, latitude, longitude } = addressData;
+      if (!street || !city) {
+        throw new Error('street and city are required');
+      }
+
+      // La première adresse devient l'adresse par défaut
+      const existingCount = await this.prisma.address.count({ where: { profileId: profile.id } });
+
+      // Champs listés un par un : orderId/profileId ne viennent jamais du client
       const address = await this.prisma.address.create({
         data: {
-          ...addressData,
+          street,
+          city,
+          postalCode: postalCode || '00000',
+          country: country || 'Guinée',
+          latitude: typeof latitude === 'number' ? latitude : null,
+          longitude: typeof longitude === 'number' ? longitude : null,
+          isDefault: existingCount === 0,
           profileId: profile.id
         }
       });

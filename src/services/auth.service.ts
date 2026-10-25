@@ -4,6 +4,7 @@ import type { User, UserRole } from '@prisma/client'
 import DBService from './db'
 import { AppError } from '../common/middleware/errorHandler'
 import logger from '../common/logger'
+import { MailService } from './mail.service'
 
 interface TokenPayload {
   userId: string
@@ -18,9 +19,20 @@ interface TokenPair {
   refreshToken: string
 }
 
+// Refuse de démarrer sans secret : un secret par défaut permettrait de forger des tokens
+function requireSecret(name: string): string {
+  const value = process.env[name]
+  if (!value || value.length < 16) {
+    throw new Error(`${name} doit être défini (au moins 16 caractères)`)
+  }
+  return value
+}
+
+type TokenPurpose = 'verify-email' | 'reset-password'
+
 export class AuthService {
-  private static readonly ACCESS_TOKEN_SECRET = process.env.JWT_SECRET || 'your-secret-key'
-  private static readonly REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key'
+  private static readonly ACCESS_TOKEN_SECRET = requireSecret('JWT_SECRET')
+  private static readonly REFRESH_TOKEN_SECRET = requireSecret('JWT_REFRESH_SECRET')
   private static readonly ACCESS_TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m'
   private static readonly REFRESH_TOKEN_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '7d'
 
@@ -79,12 +91,68 @@ export class AuthService {
 
     // Remove password from response
     const { password, ...userWithoutPassword } = user
-    
+
     // Generate tokens for automatic login
     const tokens = this.generateTokenPair(user)
 
+    try {
+      await MailService.sendVerificationEmail(
+        user.email,
+        this.generatePurposeToken({ id: user.id, password: hashedPassword }, 'verify-email'),
+      )
+    } catch (error) {
+      logger.error(`Échec de l'envoi de l'e-mail de vérification à ${user.email}`, error)
+    }
+
     logger.info(`New user registered: ${user.email}`)
     return { ...tokens, user: userWithoutPassword }
+  }
+
+  /**
+   * Token à usage unique (vérification e-mail, reset mot de passe).
+   * Le hash du mot de passe entre dans le secret : le token devient invalide dès que le mot de passe change.
+   */
+  public static generatePurposeToken(user: Pick<User, 'id' | 'password'>, purpose: TokenPurpose): string {
+    return jwt.sign({ userId: user.id, purpose }, this.ACCESS_TOKEN_SECRET + user.password, {
+      expiresIn: purpose === 'reset-password' ? '1h' : '24h',
+      issuer: 'restaurant-api',
+    })
+  }
+
+  public static async verifyPurposeToken(token: string, purpose: TokenPurpose): Promise<User> {
+    const decoded = jwt.decode(token) as { userId?: string; purpose?: string } | null
+    if (!decoded?.userId || decoded.purpose !== purpose) {
+      throw new AppError('Lien invalide ou expiré', 400)
+    }
+
+    const user = await DBService.getClient().user.findUnique({
+      where: { id: decoded.userId },
+      omit: { password: false },
+    })
+    if (!user) {
+      throw new AppError('Lien invalide ou expiré', 400)
+    }
+
+    try {
+      jwt.verify(token, this.ACCESS_TOKEN_SECRET + user.password, { issuer: 'restaurant-api' })
+    } catch {
+      throw new AppError('Lien invalide ou expiré', 400)
+    }
+    return user
+  }
+
+  /**
+   * Verify refresh token
+   */
+  public static verifyRefreshToken(token: string): TokenPayload {
+    try {
+      return jwt.verify(token, this.REFRESH_TOKEN_SECRET, {
+        issuer: 'restaurant-api',
+        audience: 'restaurant-app',
+      }) as TokenPayload
+    } catch {
+      throw new AppError('Token de rafraîchissement invalide ou expiré', 401)
+    }
   }
 
   /**
@@ -96,6 +164,7 @@ export class AuthService {
     const user = await prisma.user.findUnique({
       where: { email },
       include: { profile: true },
+      omit: { password: false },
     })
 
     if (!user || !user.isActive) {

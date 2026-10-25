@@ -28,7 +28,8 @@ const router: Router = Router();
  *                   items:
  *                     $ref: '#/components/schemas/DeliveryPerson'
  */
-router.get('/', DelivererController.getAvailableDeliverers);
+// Positions GPS des livreurs : réservé aux admins
+router.get('/', authenticateJWT, authorize(['ADMIN']), DelivererController.getAvailableDeliverers);
 
 /**
  * @swagger
@@ -60,7 +61,7 @@ router.get('/', DelivererController.getAvailableDeliverers);
  *       404:
  *         description: Delivery person not found
  */
-router.get('/:id', DelivererController.getDelivererById);
+router.get('/:id', authenticateJWT, DelivererController.getDelivererById);
 
 // Protected routes
 router.use(authenticateJWT);

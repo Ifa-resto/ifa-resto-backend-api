@@ -16,8 +16,16 @@ export const authLimiter = rateLimit({
       }
     : {}),
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 5,
   message: 'Trop de tentatives de connexion',
+})
+
+// Compteur séparé pour les e-mails (vérification, mot de passe oublié) :
+// ces étapes ne doivent pas consommer les tentatives de connexion
+export const emailLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: Number(process.env.AUTH_RATE_LIMIT_MAX) || 5,
+  message: 'Trop de demandes, réessayez plus tard',
 })
 
 export const apiLimiter = rateLimit({

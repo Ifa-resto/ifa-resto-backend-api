@@ -111,6 +111,26 @@ class UserController {
     }
   }
 
+  // L'utilisateur connecté modifie son propre profil (validé par updateOwnProfileSchema)
+  async updateOwnProfile(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = (req as any).user?.id
+      const { firstName, lastName, phone } = req.body
+      const updatedUser = await userService.updateUser(userId, { firstName, lastName, phone })
+
+      res.status(200).json({
+        success: true,
+        message: 'Profile updated successfully',
+        data: updatedUser,
+      })
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Failed to update profile',
+      })
+    }
+  }
+
   async updateUser(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params

@@ -156,6 +156,8 @@ router.post('/checkout', CartController.checkout);
  *       404:
  *         description: Cart item not found
  */
+router.delete('/clear', CartController.clearCart);
+router.get('/total', CartController.getCartTotal);
 router.put('/:cartItemId', CartController.updateCartItem);
 
 /**
@@ -218,7 +220,6 @@ router.delete('/:cartItemId', CartController.removeFromCart);
  *       401:
  *         description: Unauthorized
  */
-router.delete('/clear', CartController.clearCart);
 
 /**
  * @swagger
@@ -250,6 +251,5 @@ router.delete('/clear', CartController.clearCart);
  *       401:
  *         description: Unauthorized
  */
-router.get('/total', CartController.getCartTotal);
 
 export default router;
