@@ -13,6 +13,9 @@ export const registerSchema = Joi.object({
   phone: Joi.string()
     .pattern(/^\+?[1-9]\d{1,14}$/)
     .optional(),
+  // Inscription livreur
+  vehicleType: Joi.string().max(30).optional(),
+  documents: Joi.array().items(Joi.string().uri()).max(10).optional(),
 })
 
 export const loginSchema = Joi.object({
@@ -54,7 +57,16 @@ export const resetPasswordSchema = Joi.object({
     .min(8)
     .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .required(),
-  confirmPassword: Joi.string().valid(Joi.ref('newPassword')).required(),
+  confirmPassword: Joi.string().valid(Joi.ref('newPassword')).optional(),
+})
+
+// Champs modifiables par l'utilisateur lui-même (ni email, ni statut du compte)
+export const updateOwnProfileSchema = Joi.object({
+  firstName: Joi.string().min(2).max(50).optional(),
+  lastName: Joi.string().min(2).max(50).optional(),
+  phone: Joi.string()
+    .pattern(/^\+?[1-9]\d{1,14}$/)
+    .optional(),
 })
 
 export const validate = (schema: Joi.ObjectSchema) => {

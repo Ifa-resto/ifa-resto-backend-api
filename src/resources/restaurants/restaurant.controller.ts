@@ -110,7 +110,22 @@ export class RestaurantController {
   static async updateRestaurant(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const restaurant = await restaurantService.updateRestaurant(id, req.body);
+      // Verify the restaurant belongs to the owner
+      const existing = await restaurantService.getRestaurantById(id);
+      if (!existing || existing.profile?.userId !== req.user?.id) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: You do not own this restaurant'
+        });
+        return;
+      }
+
+      // Seuls ces champs sont modifiables par le restaurateur
+      // (pas verificationStatus, commissionRate, rating, profileId...)
+      const editable = ['name', 'description', 'cuisine', 'logo', 'coverImage', 'isOpen', 'deliveryTime', 'deliveryFee', 'minimumOrder'];
+      const data = Object.fromEntries(Object.entries(req.body).filter(([key]) => editable.includes(key)));
+
+      const restaurant = await restaurantService.updateRestaurant(id, data);
 
       res.json({
         success: true,
@@ -129,6 +144,16 @@ export class RestaurantController {
   static async deleteRestaurant(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
+      // Verify the restaurant belongs to the owner
+      const existing = await restaurantService.getRestaurantById(id);
+      if (!existing || existing.profile?.userId !== req.user?.id) {
+        res.status(403).json({
+          success: false,
+          message: 'Forbidden: You do not own this restaurant'
+        });
+        return;
+      }
+
       await restaurantService.deleteRestaurant(id);
 
       res.json({

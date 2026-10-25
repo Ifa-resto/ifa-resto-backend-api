@@ -9,7 +9,7 @@ export class PaymentService {
 
   async processPayment(paymentData: any, userId: string) {
     try {
-      const { orderId, amount, method, cardToken } = paymentData;
+      const { orderId, amount, method } = paymentData;
       
       // Verify order exists and belongs to user
       const order = await this.prisma.order.findUnique({
@@ -34,64 +34,38 @@ export class PaymentService {
         throw new Error('Order is already paid');
       }
       
-      // Process payment based on method
-      let transactionId: string | null = null;
-      
-      switch (method) {
-        case 'CASH':
-          // Cash payments don't need transaction ID
-          break;
-        case 'CARD':
-          // In a real implementation, you would process the card payment here
-          // For now, we'll generate a mock transaction ID
-          transactionId = `card_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-          break;
-        case 'PAYPAL':
-          // In a real implementation, you would process PayPal payment here
-          transactionId = `paypal_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-          break;
-        case 'STRIPE':
-          // In a real implementation, you would process Stripe payment here
-          transactionId = `stripe_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-          break;
-        case 'MOBILE_PAYMENT':
-          // In a real implementation, you would process mobile payment here
-          transactionId = `mobile_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-          break;
-        default:
-          throw new Error('Invalid payment method');
+      if (order.status === 'CANCELLED' || order.status === 'REFUNDED') {
+        throw new Error('Cannot pay for a cancelled order');
       }
-      
-      // Create payment record
+
+      // Aucun prestataire de paiement en ligne n'est branché : on refuse plutôt que de
+      // marquer la commande comme payée sans encaissement réel.
+      if (method !== 'CASH') {
+        throw new Error('Online payment is not available yet, please choose cash on delivery');
+      }
+
+      // Paiement à la livraison : en attente jusqu'au statut DELIVERED
+      const existing = await this.prisma.payment.findFirst({
+        where: { orderId, method: 'CASH', status: 'PENDING' }
+      });
+      if (existing) {
+        return existing;
+      }
+
       const payment = await this.prisma.payment.create({
         data: {
           orderId,
-          amount,
-          method: method as PaymentMethod,
-          status: 'COMPLETED',
-          transactionId,
-          processedAt: new Date()
+          amount: order.totalAmount,
+          method: 'CASH',
+          status: 'PENDING'
         }
       });
-      
-      // Update order payment status
+
       await this.prisma.order.update({
         where: { id: orderId },
-        data: {
-          paymentStatus: 'COMPLETED',
-          paymentMethod: method as PaymentMethod
-        }
+        data: { paymentMethod: 'CASH' }
       });
-      
-      // Create order tracking entry
-      await this.prisma.orderTracking.create({
-        data: {
-          orderId,
-          status: 'CONFIRMED',
-          notes: `Payment processed via ${method}`
-        }
-      });
-      
+
       return payment;
     } catch (error) {
       logger.error('Error processing payment:', error);

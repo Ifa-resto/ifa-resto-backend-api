@@ -3,9 +3,60 @@ import DBService from '../../services/db';
 import logger from '../../common/logger';
 import { processOrderCompletion } from '../gamification/gamification.service';
 
+// Transitions de statut autorisées par rôle (l'admin peut tout faire)
+const STATUS_TRANSITIONS: Record<string, Partial<Record<OrderStatus, OrderStatus[]>>> = {
+  RESTAURANT_OWNER: {
+    PENDING: ['CONFIRMED', 'CANCELLED'],
+    CONFIRMED: ['PREPARING', 'CANCELLED'],
+    PREPARING: ['READY_FOR_PICKUP'],
+  },
+  DELIVERY_PERSON: {
+    READY_FOR_PICKUP: ['PICKED_UP'],
+    PICKED_UP: ['ON_THE_WAY', 'DELIVERED'],
+    ON_THE_WAY: ['DELIVERED'],
+  },
+};
+
+const FINAL_STATUSES: OrderStatus[] = ['DELIVERED', 'CANCELLED', 'REFUNDED'];
+
 export class OrderService {
   private get prisma(): PrismaClient {
     return DBService.getClient();
+  }
+
+  // Id de la table DeliveryPerson d'un utilisateur (différent de User.id)
+  private async getDeliveryPersonId(userId?: string): Promise<string | null> {
+    if (!userId) return null;
+    const deliveryPerson = await this.prisma.deliveryPerson.findFirst({
+      where: { profile: { userId } },
+      select: { id: true }
+    });
+    return deliveryPerson?.id ?? null;
+  }
+
+  // Lève une erreur si l'utilisateur n'a pas accès à la commande
+  private async assertCanAccessOrder(
+    order: { customerId: string; restaurantId: string; deliveryPersonId: string | null },
+    userId?: string,
+    userRole?: string
+  ) {
+    if (userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') return;
+
+    if (userRole === 'CUSTOMER' && order.customerId === userId) return;
+
+    if (userRole === 'RESTAURANT_OWNER') {
+      const restaurant = await this.prisma.restaurant.findFirst({
+        where: { id: order.restaurantId, profile: { userId } },
+        select: { id: true }
+      });
+      if (restaurant) return;
+    }
+
+    if (userRole === 'DELIVERY_PERSON' && order.deliveryPersonId) {
+      if (order.deliveryPersonId === (await this.getDeliveryPersonId(userId))) return;
+    }
+
+    throw new Error('You do not have permission to access this order');
   }
 
   async createOrder(orderData: any, customerId: string) {
@@ -105,8 +156,17 @@ export class OrderService {
           totalAmount,
           paymentMethod: 'CASH', // Default, can be updated during payment
           paymentStatus: 'PENDING',
+          // Copie de l'adresse : Address.orderId est unique, relier l'adresse enregistrée
+          // la retirerait de la commande précédente
           deliveryAddress: {
-            connect: { id: deliveryAddressId }
+            create: {
+              street: address.street,
+              city: address.city,
+              postalCode: address.postalCode,
+              country: address.country,
+              latitude: address.latitude,
+              longitude: address.longitude
+            }
           },
           notes: notes || null,
           items: {
@@ -162,6 +222,19 @@ export class OrderService {
             }
           },
           restaurant: true,
+          // Infos utiles au suivi côté client (pas les documents ni la vérification)
+          deliveryPerson: {
+            select: {
+              id: true,
+              vehicleType: true,
+              currentLat: true,
+              currentLng: true,
+              rating: true,
+              profile: {
+                select: { firstName: true, lastName: true, phoneNumber: true, avatar: true }
+              }
+            }
+          },
           tracking: {
             orderBy: {
               timestamp: 'asc'
@@ -175,29 +248,7 @@ export class OrderService {
         return null;
       }
 
-      // Check permissions
-      if (userRole === 'CUSTOMER' && order.customerId !== userId) {
-        throw new Error('You do not have permission to view this order');
-      }
-
-      if (userRole === 'RESTAURANT_OWNER') {
-        const restaurant = await this.prisma.restaurant.findFirst({
-          where: {
-            id: order.restaurantId,
-            profile: {
-              userId: userId
-            }
-          }
-        });
-
-        if (!restaurant) {
-          throw new Error('You do not have permission to view this order');
-        }
-      }
-
-      if (userRole === 'DELIVERY_PERSON' && order.deliveryPersonId !== userId) {
-        throw new Error('You do not have permission to view this order');
-      }
+      await this.assertCanAccessOrder(order, userId, userRole);
 
       return order;
     } catch (error) {
@@ -217,26 +268,7 @@ export class OrderService {
         throw new Error('Order not found');
       }
 
-      // Permission checks align with getOrderById
-      if (userRole === 'CUSTOMER' && order.customerId !== userId) {
-        throw new Error('You do not have permission to view this order tracking');
-      }
-
-      if (userRole === 'RESTAURANT_OWNER') {
-        const restaurant = await this.prisma.restaurant.findFirst({
-          where: {
-            id: order.restaurantId,
-            profile: { userId: userId }
-          }
-        });
-        if (!restaurant) {
-          throw new Error('You do not have permission to view this order tracking');
-        }
-      }
-
-      if (userRole === 'DELIVERY_PERSON' && order.deliveryPersonId !== userId) {
-        throw new Error('You do not have permission to view this order tracking');
-      }
+      await this.assertCanAccessOrder(order, userId, userRole);
 
       const tracking = await this.prisma.orderTracking.findMany({
         where: { orderId },
@@ -423,23 +455,35 @@ export class OrderService {
         throw new Error('Order not found');
       }
 
-      // Check permissions based on user role and status
-      if (userRole === 'CUSTOMER' && status !== 'CANCELLED') {
-        throw new Error('Customers can only cancel orders');
-      }
+      const isAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
 
       if (userRole === 'RESTAURANT_OWNER' && order.restaurant.profile.userId !== userId) {
         throw new Error('You do not have permission to update this order');
       }
 
-      if (userRole === 'DELIVERY_PERSON' && order.deliveryPersonId !== userId) {
-        throw new Error('You do not have permission to update this order');
+      if (userRole === 'DELIVERY_PERSON') {
+        const deliveryPersonId = await this.getDeliveryPersonId(userId);
+        if (!deliveryPersonId || order.deliveryPersonId !== deliveryPersonId) {
+          throw new Error('You do not have permission to update this order');
+        }
+      }
+
+      if (!isAdmin) {
+        const allowed = STATUS_TRANSITIONS[userRole || '']?.[order.status] || [];
+        if (!allowed.includes(status as OrderStatus)) {
+          throw new Error(`Transition ${order.status} -> ${status} not allowed`);
+        }
+      } else if (FINAL_STATUSES.includes(order.status) && order.status === status) {
+        throw new Error(`Order is already ${status}`);
       }
 
       // Update order status
       const updatedOrder = await this.prisma.order.update({
         where: { id: orderId },
-        data: { status: status as OrderStatus },
+        data: {
+          status: status as OrderStatus,
+          ...(status === 'DELIVERED' && { actualDelivery: new Date() })
+        },
         include: {
           items: {
             include: {
@@ -464,8 +508,33 @@ export class OrderService {
         }
       });
 
-      // Process gamification if delivered
-      if (status === 'DELIVERED') {
+      // Paiement à la livraison : encaissé quand la commande est livrée
+      if (status === 'DELIVERED' && order.paymentMethod === 'CASH' && order.paymentStatus !== 'COMPLETED') {
+        const { count } = await this.prisma.payment.updateMany({
+          where: { orderId: order.id, method: 'CASH', status: 'PENDING' },
+          data: { status: 'COMPLETED', processedAt: new Date() }
+        });
+        if (count === 0) {
+          await this.prisma.payment.create({
+            data: { orderId: order.id, amount: order.totalAmount, method: 'CASH', status: 'COMPLETED', processedAt: new Date() }
+          });
+        }
+        await this.prisma.order.update({
+          where: { id: order.id },
+          data: { paymentStatus: 'COMPLETED' }
+        });
+      }
+
+      // Livraison terminée ou annulée : le livreur redevient disponible
+      if (order.deliveryPersonId && FINAL_STATUSES.includes(status as OrderStatus)) {
+        await this.prisma.deliveryPerson.update({
+          where: { id: order.deliveryPersonId },
+          data: { isAvailable: true }
+        });
+      }
+
+      // Process gamification if delivered (la transition garantit un seul passage)
+      if (status === 'DELIVERED' && order.status !== 'DELIVERED') {
         try {
           await processOrderCompletion(order.customerId, order.id);
         } catch (gamiError) {
@@ -556,6 +625,13 @@ export class OrderService {
         }
       });
 
+      if (order.deliveryPersonId) {
+        await this.prisma.deliveryPerson.update({
+          where: { id: order.deliveryPersonId },
+          data: { isAvailable: true }
+        });
+      }
+
       return updatedOrder;
     } catch (error) {
       logger.error('Error cancelling order:', error);
@@ -581,12 +657,31 @@ export class OrderService {
         throw new Error('Delivery person is not available');
       }
 
-      // Update order with delivery person
+      if (deliveryPerson.verificationStatus !== 'VERIFIED') {
+        throw new Error('Delivery person is not verified');
+      }
+
+      const current = await this.prisma.order.findUnique({ where: { id: orderId } });
+      if (!current) {
+        throw new Error('Order not found');
+      }
+      if (FINAL_STATUSES.includes(current.status)) {
+        throw new Error(`Cannot assign a delivery person to a ${current.status} order`);
+      }
+
+      // Libère l'éventuel livreur précédent
+      if (current.deliveryPersonId && current.deliveryPersonId !== deliveryPersonId) {
+        await this.prisma.deliveryPerson.update({
+          where: { id: current.deliveryPersonId },
+          data: { isAvailable: true }
+        });
+      }
+
+      // Update order with delivery person (le statut de préparation ne change pas)
       const order = await this.prisma.order.update({
         where: { id: orderId },
         data: {
-          deliveryPersonId,
-          status: 'CONFIRMED'
+          deliveryPersonId
         },
         include: {
           items: {
@@ -612,7 +707,7 @@ export class OrderService {
       await this.prisma.orderTracking.create({
         data: {
           orderId: order.id,
-          status: 'CONFIRMED',
+          status: order.status,
           notes: `Assigned to delivery person ${deliveryPerson.profile?.firstName} ${deliveryPerson.profile?.lastName}`
         }
       });
@@ -630,7 +725,7 @@ export class OrderService {
     }
   }
 
-  async getOrderByOrderNumber(orderNumber: string) {
+  async getOrderByOrderNumber(orderNumber: string, userId?: string, userRole?: string) {
     try {
       const order = await this.prisma.order.findUnique({
         where: { orderNumber },
@@ -654,6 +749,10 @@ export class OrderService {
           }
         }
       });
+
+      if (order) {
+        await this.assertCanAccessOrder(order, userId, userRole);
+      }
 
       return order;
     } catch (error) {

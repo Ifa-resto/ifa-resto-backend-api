@@ -12,12 +12,12 @@ export const validate = (schema: ZodSchema) => {
       });
       next();
     } catch (error: any) {
-      logger.warn('Validation error:', error.errors);
+      logger.warn('Validation error:', error.issues ?? error.errors);
       
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors: error.errors.map((err: any) => ({
+        errors: (error.issues ?? error.errors ?? []).map((err: any) => ({
           path: err.path.join('.'),
           message: err.message,
         })),
@@ -33,12 +33,12 @@ export const validateBody = (schema: ZodSchema) => {
       schema.parse(req.body);
       next();
     } catch (error: any) {
-      logger.warn('Validation error:', error.errors);
+      logger.warn('Validation error:', error.issues ?? error.errors);
       
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors: error.errors.map((err: any) => ({
+        errors: (error.issues ?? error.errors ?? []).map((err: any) => ({
           path: err.path.join('.'),
           message: err.message,
         })),

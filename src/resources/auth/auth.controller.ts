@@ -3,6 +3,7 @@ import { AuthService } from '../../services/auth.service'
 import DBService from '../../services/db'
 import { AppError } from '../../common/middleware/errorHandler'
 import logger from '../../common/logger'
+import { MailService } from '../../services/mail.service'
 
 export class AuthController {
   /**
@@ -63,7 +64,7 @@ export class AuthController {
         throw new AppError('Token de rafraîchissement requis', 400)
       }
 
-      const payload = AuthService.verifyAccessToken(refreshToken)
+      const payload = AuthService.verifyRefreshToken(refreshToken)
       const prisma = DBService.getClient()
 
       const user = await prisma.user.findUnique({
@@ -87,13 +88,9 @@ export class AuthController {
     }
   }
 
-  /**
-   * Logout user
-   */
   static async logout(req: Request, res: Response, next: NextFunction) {
     try {
-      // In a real implementation, you would invalidate the token
-      // For now, we'll just return a success message
+      // Les JWT sont sans état : le client supprime ses tokens
       res.json({
         success: true,
         message: 'Déconnexion réussie',
@@ -103,9 +100,6 @@ export class AuthController {
     }
   }
 
-  /**
-   * Forgot password
-   */
   static async forgotPassword(req: Request, res: Response, next: NextFunction) {
     try {
       const { email } = req.body
@@ -113,22 +107,19 @@ export class AuthController {
 
       const user = await prisma.user.findUnique({
         where: { email },
+        omit: { password: false },
       })
 
-      if (!user) {
-        // Don't reveal if email exists or not
-        return res.json({
-          success: true,
-          message: 'Si cet email existe, un lien de réinitialisation a été envoyé',
-        })
+      // Même réponse que l'e-mail existe ou non
+      if (user && user.isActive) {
+        const token = AuthService.generatePurposeToken(user, 'reset-password')
+        try {
+          await MailService.sendPasswordResetEmail(user.email, token)
+        } catch (mailError) {
+          logger.error(`Échec de l'envoi de l'e-mail de réinitialisation à ${email}`, mailError)
+        }
+        logger.info(`Password reset requested for: ${email}`)
       }
-
-      // In a real implementation, you would:
-      // 1. Generate a password reset token
-      // 2. Save it to database with expiration
-      // 3. Send email with reset link
-
-      logger.info(`Password reset requested for: ${email}`)
 
       res.json({
         success: true,
@@ -139,9 +130,6 @@ export class AuthController {
     }
   }
 
-  /**
-   * Reset password
-   */
   static async resetPassword(req: Request, res: Response, next: NextFunction) {
     try {
       const { token, newPassword } = req.body
@@ -150,11 +138,17 @@ export class AuthController {
         throw new AppError('Token et nouveau mot de passe requis', 400)
       }
 
-      // In a real implementation, you would:
-      // 1. Verify the reset token
-      // 2. Check if it's not expired
-      // 3. Update the user's password
-      // 4. Invalidate the reset token
+      const user = await AuthService.verifyPurposeToken(token, 'reset-password')
+
+      // Changer le hash invalide le lien, qui ne peut donc servir qu'une fois
+      await DBService.getClient().user.update({
+        where: { id: user.id },
+        data: {
+          password: await AuthService.hashPassword(newPassword),
+          // Recevoir le lien prouve l'accès à la boîte mail
+          emailVerified: true,
+        },
+      })
 
       res.json({
         success: true,
@@ -165,9 +159,6 @@ export class AuthController {
     }
   }
 
-  /**
-   * Verify email
-   */
   static async verifyEmail(req: Request, res: Response, next: NextFunction) {
     try {
       const { token } = req.body
@@ -176,10 +167,14 @@ export class AuthController {
         throw new AppError('Token de vérification requis', 400)
       }
 
-      // In a real implementation, you would:
-      // 1. Verify the email verification token
-      // 2. Update user's emailVerified status
-      // 3. Invalidate the verification token
+      const user = await AuthService.verifyPurposeToken(token, 'verify-email')
+
+      if (!user.emailVerified) {
+        await DBService.getClient().user.update({
+          where: { id: user.id },
+          data: { emailVerified: true },
+        })
+      }
 
       res.json({
         success: true,
@@ -190,9 +185,24 @@ export class AuthController {
     }
   }
 
-  /**
-   * Get current user profile
-   */
+  static async resendVerification(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { email } = req.body
+      const user = await DBService.getClient().user.findUnique({ where: { email }, omit: { password: false } })
+
+      if (user && user.isActive && !user.emailVerified) {
+        await MailService.sendVerificationEmail(user.email, AuthService.generatePurposeToken(user, 'verify-email'))
+      }
+
+      res.json({
+        success: true,
+        message: "Si ce compte existe et n'est pas vérifié, un nouvel e-mail a été envoyé",
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+
   static async getProfile(req: Request, res: Response, next: NextFunction) {
     try {
       const userId = (req as any).user?.id

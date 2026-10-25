@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { AuthController } from './auth.controller'
 import { authenticateJWT } from '../../common/middleware/auth.middleware'
-import { authLimiter } from '../../common/middleware/rateLimiter'
+import { authLimiter, emailLimiter } from '../../common/middleware/rateLimiter'
 import {
   validate,
   registerSchema,
@@ -110,7 +110,7 @@ router.post('/login', authLimiter, validate(loginSchema), AuthController.login)
  *       400:
  *         description: Validation error
  */
-router.post('/forgot-password', validate(forgotPasswordSchema), AuthController.forgotPassword)
+router.post('/forgot-password', emailLimiter, validate(forgotPasswordSchema), AuthController.forgotPassword)
 
 /**
  * @swagger
@@ -143,7 +143,7 @@ router.post('/forgot-password', validate(forgotPasswordSchema), AuthController.f
  *       400:
  *         description: Validation error
  */
-router.post('/reset-password', validate(resetPasswordSchema), AuthController.resetPassword)
+router.post('/reset-password', emailLimiter, validate(resetPasswordSchema), AuthController.resetPassword)
 
 /**
  * @swagger
@@ -169,7 +169,9 @@ router.post('/reset-password', validate(resetPasswordSchema), AuthController.res
  *       400:
  *         description: Invalid token
  */
-router.post('/verify-email', AuthController.verifyEmail)
+router.post('/verify-email', emailLimiter, AuthController.verifyEmail)
+
+router.post('/resend-verification', emailLimiter, validate(forgotPasswordSchema), AuthController.resendVerification)
 
 // Routes protégées (authentification requise)
 router.post('/refresh', AuthController.refresh)

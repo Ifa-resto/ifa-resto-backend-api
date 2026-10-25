@@ -102,6 +102,7 @@ router.post('/', validateBody(processPaymentSchema), PaymentController.processPa
  *       404:
  *         description: Payment not found
  */
+router.get('/my-payments', PaymentController.getUserPayments);
 router.get('/:id', PaymentController.getPaymentById);
 
 /**
@@ -200,7 +201,6 @@ router.post('/:id/refund', authorize(['ADMIN']), validateBody(refundPaymentSchem
  *       401:
  *         description: Unauthorized
  */
-router.get('/my-payments', PaymentController.getUserPayments);
 
 /**
  * @swagger

@@ -16,7 +16,9 @@ class DatabaseService {
     })
 
     const adapter = new PrismaPg(this.pool)
-    this.prisma = new PrismaClient({ adapter })
+    // Le hash du mot de passe n'est jamais renvoyé, même via un include (customer, user...).
+    // Les requêtes qui en ont besoin le demandent avec `omit: { password: false }`.
+    this.prisma = new PrismaClient({ adapter, omit: { user: { password: true } } }) as unknown as PrismaClient
   }
 
   public static getInstance(): DatabaseService {

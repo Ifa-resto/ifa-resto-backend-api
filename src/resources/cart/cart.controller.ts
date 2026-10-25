@@ -347,7 +347,7 @@ export const getCartTotal = async (req: Request, res: Response) => {
 export const checkout = async (req: Request, res: Response) => {
   try {
     const userId = (req as any).user.id;
-    const result = await cartService.checkout(userId);
+    const result = await cartService.checkout(userId, req.body?.deliveryAddressId);
     res.json(result);
   } catch (error: any) {
     res.status(400).json({

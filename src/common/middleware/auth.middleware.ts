@@ -44,7 +44,8 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
         ;(req as any).user = user
         next()
       } catch (err) {
-        return res.sendStatus(403)
+        // 401 pour que les applis tentent un refresh du token
+        return res.sendStatus(401)
       }
     } else {
       res.sendStatus(401)

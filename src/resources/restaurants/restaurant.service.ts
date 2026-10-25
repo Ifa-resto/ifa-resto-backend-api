@@ -19,17 +19,50 @@ export class RestaurantService {
         throw new Error('Owner profile not found');
       }
 
+      // Champs explicites : le statut de vérification et la commission ne sont fixés que par un admin,
+      // et `address` / `schedules` ne sont pas des colonnes de Restaurant
+      const { name, description, cuisine, logo, coverImage, deliveryTime, deliveryFee, minimumOrder, address, schedules } = restaurantData;
+
       const restaurant = await this.prisma.restaurant.create({
         data: {
-          ...restaurantData,
+          name,
+          description,
+          cuisine,
+          logo,
+          coverImage,
           profileId: ownerProfile.id,
           rating: 0,
           isOpen: true,
-          deliveryTime: restaurantData.deliveryTime || 30,
-          deliveryFee: restaurantData.deliveryFee || 0,
-          minimumOrder: restaurantData.minimumOrder || 0,
+          deliveryTime: deliveryTime || 30,
+          deliveryFee: deliveryFee || 0,
+          minimumOrder: minimumOrder || 0,
+          ...(schedules?.length && {
+            schedules: {
+              create: schedules.map((s: any) => ({
+                dayOfWeek: s.dayOfWeek,
+                openTime: s.openTime,
+                closeTime: s.closeTime,
+                isOpen: s.isOpen ?? true
+              }))
+            }
+          })
         }
       });
+
+      // Pas de colonne adresse sur Restaurant : l'adresse est rattachée au profil du restaurateur
+      if (address) {
+        await this.prisma.address.create({
+          data: {
+            profileId: ownerProfile.id,
+            street: address.street,
+            city: address.city,
+            postalCode: address.postalCode,
+            country: address.country,
+            latitude: address.latitude,
+            longitude: address.longitude
+          }
+        });
+      }
 
       return restaurant;
     } catch (error) {

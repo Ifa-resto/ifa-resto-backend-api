@@ -1,3 +1,5 @@
+// Charger .env avant tout import qui lit process.env (ex. secrets JWT)
+import './common/env'
 import express, { Application, Request, Response } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
@@ -7,8 +9,6 @@ import unknownEndpoint from './middlewares/unknownEndpoint'
 import { errorHandler } from './common/middleware/errorHandler'
 import { specs, swaggerUi } from './common/swagger'
 
-// to use env variables
-import './common/env'
 
 const app: Application = express()
 

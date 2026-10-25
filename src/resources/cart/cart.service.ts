@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import DBService from '../../services/db';
 import logger from '../../common/logger';
+import OrderService from '../orders/order.service';
 
 // Create a type that extends PrismaClient with the cartItem property
 type ExtendedPrismaClient = PrismaClient & {
@@ -204,89 +205,49 @@ export class CartService {
       throw error;
     }
   }
-  async checkout(userId: string) {
+  async checkout(userId: string, deliveryAddressId?: string) {
     try {
       // 1. Get items
       const cartItems = await this.prisma.cartItem.findMany({
         where: { userId },
-        include: { menuItem: { include: { restaurant: true } } }
+        include: { menuItem: true }
       });
       if (cartItems.length === 0) throw new Error('Cart is empty');
 
-      // 2. Group by restaurant
+      // 2. Une commande par restaurant : on prend celui du premier article
       const restaurantId = cartItems[0].menuItem.restaurantId;
-      const items = cartItems.filter(i => i.menuItem.restaurantId === restaurantId);
-      const restaurant = items[0].menuItem.restaurant;
+      const items = cartItems.filter((i: any) => i.menuItem.restaurantId === restaurantId);
 
-      // 3. Get/Create Address
+      // 3. Adresse choisie, sinon l'adresse par défaut du client
       const profile = await this.prisma.profile.findUnique({ where: { userId } });
       if (!profile) throw new Error('Profile not found');
 
-      let address = await this.prisma.address.findFirst({ where: { profileId: profile.id } });
-      if (!address) {
-        address = await this.prisma.address.create({
-          data: {
-            profileId: profile.id,
-            street: 'Default Address',
-            city: 'Conakry',
-            postalCode: '00000',
-            country: 'Guinée',
-            isDefault: true
-          }
-        });
-      }
+      const address = deliveryAddressId
+        ? await this.prisma.address.findFirst({ where: { id: deliveryAddressId, profileId: profile.id } })
+        : await this.prisma.address.findFirst({
+            where: { profileId: profile.id },
+            orderBy: { isDefault: 'desc' }
+          });
+      if (!address) throw new Error('Veuillez ajouter une adresse de livraison');
 
-      // 4. Create Order
-      let subtotal = 0;
-      const orderItemsData = items.map((item: any) => {
-        const price = (item.menuItem.discountPrice !== null && item.menuItem.discountPrice !== undefined)
-          ? item.menuItem.discountPrice
-          : item.menuItem.price;
-        subtotal += price * item.quantity;
-        return {
-          menuItemId: item.menuItemId,
-          quantity: item.quantity,
-          unitPrice: price,
-          totalPrice: price * item.quantity,
-          notes: item.notes
-        };
-      });
-
-      const deliveryFee = restaurant.deliveryFee || 0;
-      const taxAmount = (subtotal + deliveryFee) * 0.1;
-      const totalAmount = subtotal + deliveryFee + taxAmount;
-
-      const order = await this.prisma.order.create({
-        data: {
-          orderNumber: `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          customerId: userId,
+      // 4. Mêmes contrôles que POST /orders (restaurant ouvert et vérifié, minimum, disponibilité)
+      const order = await new OrderService().createOrder(
+        {
           restaurantId,
-          subtotal,
-          deliveryFee,
-          taxAmount,
-          totalAmount,
-          paymentMethod: 'CASH',
-          paymentStatus: 'PENDING',
-          deliveryAddress: {
-            connect: { id: address.id }
-          },
-          items: { create: orderItemsData }
-        }
-      });
+          deliveryAddressId: address.id,
+          items: items.map((item: any) => ({
+            menuItemId: item.menuItemId,
+            quantity: item.quantity,
+            notes: item.notes
+          }))
+        },
+        userId
+      );
 
       // 5. Clear processed items
       await this.prisma.cartItem.deleteMany({
         where: {
           id: { in: items.map((i: any) => i.id) }
-        }
-      });
-
-      // Add tracking
-      await this.prisma.orderTracking.create({
-        data: {
-          orderId: order.id,
-          status: 'PENDING',
-          notes: 'Order created via checkout'
         }
       });
 

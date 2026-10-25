@@ -302,7 +302,7 @@ router.get('/:id/tracking', OrderController.getOrderTracking);
  *       404:
  *         description: Order not found
  */
-router.put('/:id/status', authorize(['RESTAURANT_OWNER']), validateBody(updateOrderStatusSchema), OrderController.updateOrderStatus);
+router.put('/:id/status', authorize(['RESTAURANT_OWNER', 'ADMIN']), validateBody(updateOrderStatusSchema), OrderController.updateOrderStatus);
 
 /**
  * @swagger

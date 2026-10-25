@@ -9,16 +9,9 @@ export const createOrderSchema = z.object({
       notes: z.string().optional(),
     })
   ).min(1),
-  deliveryAddress: z.object({
-    street: z.string().min(1),
-    city: z.string().min(1),
-    postalCode: z.string().min(1),
-    country: z.string().min(1),
-    latitude: z.number().optional(),
-    longitude: z.number().optional(),
-  }),
+  deliveryAddressId: z.string().uuid(),
   notes: z.string().optional(),
-  paymentMethod: z.enum(['CASH', 'CARD', 'PAYPAL', 'STRIPE', 'MOBILE_PAYMENT']),
+  paymentMethod: z.enum(['CASH', 'CARD', 'PAYPAL', 'STRIPE', 'MOBILE_PAYMENT']).optional(),
 });
 
 export const updateOrderStatusSchema = z.object({
