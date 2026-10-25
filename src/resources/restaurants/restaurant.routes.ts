@@ -152,6 +152,9 @@ router.get('/search', RestaurantController.searchRestaurants);
  *       404:
  *         description: Restaurant not found
  */
+// Restaurant du restaurateur connecté (déclaré avant '/:id')
+router.get('/mine', authenticateJWT, authorize(['RESTAURANT_OWNER']), RestaurantController.getMyRestaurant);
+
 router.get('/:id', RestaurantController.getRestaurantById);
 
 /**

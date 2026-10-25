@@ -63,6 +63,132 @@ export default class DelivererService {
     }
   }
 
+  // Profil du livreur connecté + activité du jour (courses livrées, frais de livraison gagnés)
+  async getMyDashboard(userId: string) {
+    const deliverer = await this.getDelivererByUserId(userId);
+    if (!deliverer) {
+      throw new Error('Delivery person not found for user');
+    }
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const today = await this.prisma.order.aggregate({
+      where: { deliveryPersonId: deliverer.id, status: 'DELIVERED', actualDelivery: { gte: startOfDay } },
+      _count: { _all: true },
+      _sum: { deliveryFee: true },
+    });
+
+    return {
+      id: deliverer.id,
+      firstName: deliverer.profile.firstName,
+      lastName: deliverer.profile.lastName,
+      phoneNumber: deliverer.profile.phoneNumber,
+      vehicleType: deliverer.vehicleType,
+      verificationStatus: deliverer.verificationStatus,
+      isAvailable: deliverer.isAvailable,
+      currentLat: deliverer.currentLat,
+      currentLng: deliverer.currentLng,
+      rating: deliverer.rating,
+      today: {
+        deliveries: today._count._all,
+        earnings: today._sum.deliveryFee || 0,
+      },
+    };
+  }
+
+  // Champs d'une course utiles au livreur : retrait au restaurant, dépôt chez le client
+  private courseInclude = {
+    restaurant: {
+      select: {
+        id: true,
+        name: true,
+        logo: true,
+        // Pas de colonne adresse sur Restaurant : c'est l'adresse du profil du restaurateur
+        profile: {
+          select: {
+            phoneNumber: true,
+            address: { take: 1, select: { street: true, city: true, latitude: true, longitude: true } },
+          },
+        },
+      },
+    },
+    deliveryAddress: true,
+    customer: { select: { profile: { select: { firstName: true, lastName: true, phoneNumber: true } } } },
+    items: { select: { id: true, quantity: true, menuItem: { select: { name: true } } } },
+  } as const;
+
+  private static ACTIVE_STATUSES = ['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'PICKED_UP', 'ON_THE_WAY'] as const;
+
+  // Course en cours du livreur (une seule à la fois)
+  async getCurrentCourse(userId: string) {
+    const deliverer = await this.getDelivererByUserId(userId);
+    if (!deliverer) {
+      throw new Error('Delivery person not found for user');
+    }
+    return this.prisma.order.findFirst({
+      where: { deliveryPersonId: deliverer.id, status: { in: [...DelivererService.ACTIVE_STATUSES] } },
+      include: this.courseInclude,
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  // Courses sans livreur, acceptées par un restaurant vérifié (les plus anciennes d'abord)
+  async getOffers(userId: string) {
+    const deliverer = await this.getDelivererByUserId(userId);
+    if (!deliverer) {
+      throw new Error('Delivery person not found for user');
+    }
+    if (deliverer.verificationStatus !== 'VERIFIED' || !deliverer.isAvailable) {
+      return [];
+    }
+    return this.prisma.order.findMany({
+      where: {
+        deliveryPersonId: null,
+        status: { in: ['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'] },
+        restaurant: { verificationStatus: 'VERIFIED' },
+      },
+      include: this.courseInclude,
+      orderBy: { createdAt: 'asc' },
+      take: 10,
+    });
+  }
+
+  // Accepter une course : la mise à jour conditionnelle garantit qu'un seul livreur l'obtient
+  async acceptCourse(userId: string, orderId: string) {
+    const deliverer = await this.getDelivererByUserId(userId);
+    if (!deliverer) {
+      throw new Error('Delivery person not found for user');
+    }
+    if (deliverer.verificationStatus !== 'VERIFIED') {
+      throw Object.assign(new Error('Votre compte livreur n\'est pas encore validé'), { status: 403 });
+    }
+    const current = await this.getCurrentCourse(userId);
+    if (current) {
+      throw Object.assign(new Error('Terminez votre course en cours avant d\'en accepter une autre'), { status: 409 });
+    }
+
+    const { count } = await this.prisma.order.updateMany({
+      where: { id: orderId, deliveryPersonId: null, status: { in: ['CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'] } },
+      data: { deliveryPersonId: deliverer.id },
+    });
+    if (count === 0) {
+      throw Object.assign(new Error('Cette course n\'est plus disponible'), { status: 409 });
+    }
+
+    const order = await this.prisma.order.findUniqueOrThrow({ where: { id: orderId }, include: this.courseInclude });
+    await this.prisma.orderTracking.create({
+      data: {
+        orderId,
+        status: order.status,
+        notes: `Course acceptée par ${deliverer.profile.firstName} ${deliverer.profile.lastName}`,
+      },
+    });
+    // Occupé jusqu'à la livraison (l'API le remet disponible au statut DELIVERED)
+    await this.prisma.deliveryPerson.update({ where: { id: deliverer.id }, data: { isAvailable: false } });
+
+    return order;
+  }
+
   async updateDelivererLocationByUser(userId: string, location: { latitude: number; longitude: number }) {
     try {
       const deliverer = await this.getDelivererByUserId(userId);

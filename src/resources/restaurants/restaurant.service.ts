@@ -250,9 +250,7 @@ export class RestaurantService {
 
       return restaurants.map((r, index) => ({
         id: `cuisine-${index}`,
-        name: r.cuisine,
-        image: `https://source.unsplash.com/200x200/?${encodeURIComponent(r.cuisine)}`,
-        color: '#FFC244'
+        name: r.cuisine
       }));
     } catch (error) {
       logger.error('Error fetching cuisines:', error);
@@ -262,25 +260,8 @@ export class RestaurantService {
 
   async getPromos() {
     try {
-      // Mock data for now, could be replaced by a real Promo model later
-      return [
-        {
-          id: '1',
-          title: 'Offre Spéciale',
-          description: '-20% sur tout',
-          image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
-          code: 'WELCOME20',
-          discountValue: 20
-        },
-        {
-          id: '2',
-          title: 'Livraison Gratuite',
-          description: 'Pour votre première commande',
-          image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800',
-          code: 'FREEDELIVERY',
-          discountValue: 0
-        }
-      ];
+      // Pas encore de modèle Promo en base : aucune offre plutôt que des offres inventées
+      return [];
     } catch (error) {
       logger.error('Error fetching promos:', error);
       throw error;

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../../common/middleware/auth.middleware';
 import logger from '../../common/logger';
 import RestaurantService from './restaurant.service';
+import DBService from '../../services/db';
 
 // Create an instance of RestaurantService
 const restaurantService = new RestaurantService();
@@ -30,6 +31,31 @@ export class RestaurantController {
   }
 
   // Get restaurant by ID
+  // Get the restaurant owned by the logged-in owner (null if not created yet)
+  static async getMyRestaurant(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const restaurant = await DBService.getClient().restaurant.findFirst({
+        where: { profile: { userId: req.user?.id } },
+        include: {
+          categories: { orderBy: { sortOrder: 'asc' } },
+          menus: { orderBy: { name: 'asc' } },
+          schedules: { orderBy: { dayOfWeek: 'asc' } }
+        }
+      });
+
+      res.json({
+        success: true,
+        data: restaurant
+      });
+    } catch (error) {
+      logger.error('Error fetching owner restaurant:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch restaurant'
+      });
+    }
+  }
+
   static async getRestaurantById(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;

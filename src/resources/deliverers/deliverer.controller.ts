@@ -77,6 +77,49 @@ export class DelivererController {
     }
   }
 
+  // Profil et activité du jour du livreur connecté
+  static async getMe(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const data = await delivererService.getMyDashboard(req.user?.id || '');
+      res.json({ success: true, data });
+    } catch (error: any) {
+      logger.error('Error fetching deliverer dashboard:', error);
+      res.status(500).json({ success: false, message: error.message || 'Failed to fetch deliverer' });
+    }
+  }
+
+  // Course en cours (null si aucune)
+  static async getCurrentCourse(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const data = await delivererService.getCurrentCourse(req.user?.id || '');
+      res.json({ success: true, data });
+    } catch (error: any) {
+      logger.error('Error fetching current course:', error);
+      res.status(500).json({ success: false, message: error.message || 'Failed to fetch current course' });
+    }
+  }
+
+  // Courses disponibles pour le livreur connecté
+  static async getOffers(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const data = await delivererService.getOffers(req.user?.id || '');
+      res.json({ success: true, data });
+    } catch (error: any) {
+      logger.error('Error fetching offers:', error);
+      res.status(500).json({ success: false, message: error.message || 'Failed to fetch offers' });
+    }
+  }
+
+  static async acceptCourse(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const data = await delivererService.acceptCourse(req.user?.id || '', req.params.orderId);
+      res.json({ success: true, data });
+    } catch (error: any) {
+      logger.error('Error accepting course:', error);
+      res.status(error.status || 500).json({ success: false, message: error.message || 'Failed to accept course' });
+    }
+  }
+
   // Update deliverer location (for delivery person)
   static async updateLocation(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {

@@ -2,6 +2,19 @@ import { PrismaClient, OrderStatus } from '@prisma/client';
 import DBService from '../../services/db';
 import logger from '../../common/logger';
 import { processOrderCompletion } from '../gamification/gamification.service';
+import NotificationService from '../notifications/notification.service';
+
+const notificationService = new NotificationService();
+
+// Notification envoyée au client à chaque changement de statut
+const CUSTOMER_STATUS_MESSAGES: Partial<Record<string, { title: string; body: (restaurant: string) => string }>> = {
+  CONFIRMED: { title: 'Commande acceptée', body: (r) => `${r} a accepté votre commande.` },
+  PREPARING: { title: 'En préparation', body: (r) => `${r} prépare votre commande.` },
+  PICKED_UP: { title: 'Commande récupérée', body: (r) => `Le livreur a récupéré votre commande chez ${r}.` },
+  ON_THE_WAY: { title: 'En route', body: () => 'Votre livreur arrive. Préparez-vous à le recevoir.' },
+  DELIVERED: { title: 'Commande livrée', body: () => 'Bon appétit ! N\'hésitez pas à noter votre commande.' },
+  CANCELLED: { title: 'Commande annulée', body: (r) => `Votre commande chez ${r} a été annulée.` },
+};
 
 // Transitions de statut autorisées par rôle (l'admin peut tout faire)
 const STATUS_TRANSITIONS: Record<string, Partial<Record<OrderStatus, OrderStatus[]>>> = {
@@ -507,6 +520,21 @@ export class OrderService {
           notes: `Status updated to ${status}`
         }
       });
+
+      // Prévenir le client de chaque étape (écran Notifications de l'appli client)
+      const message = CUSTOMER_STATUS_MESSAGES[status];
+      if (message) {
+        try {
+          await notificationService.createNotification(
+            order.customerId,
+            message.title,
+            message.body(order.restaurant.name),
+            status === 'PICKED_UP' || status === 'ON_THE_WAY' ? 'DELIVERY' : 'ORDER_UPDATE'
+          );
+        } catch (notifError) {
+          logger.error('Error creating order notification:', notifError);
+        }
+      }
 
       // Paiement à la livraison : encaissé quand la commande est livrée
       if (status === 'DELIVERED' && order.paymentMethod === 'CASH' && order.paymentStatus !== 'COMPLETED') {
