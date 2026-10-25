@@ -61,6 +61,12 @@ router.get('/', authenticateJWT, authorize(['ADMIN']), DelivererController.getAv
  *       404:
  *         description: Delivery person not found
  */
+// Espace du livreur connecté (déclaré avant '/:id')
+router.get('/me', authenticateJWT, authorize(['DELIVERY_PERSON']), DelivererController.getMe);
+router.get('/me/current', authenticateJWT, authorize(['DELIVERY_PERSON']), DelivererController.getCurrentCourse);
+router.get('/me/offers', authenticateJWT, authorize(['DELIVERY_PERSON']), DelivererController.getOffers);
+router.post('/me/offers/:orderId/accept', authenticateJWT, authorize(['DELIVERY_PERSON']), DelivererController.acceptCourse);
+
 router.get('/:id', authenticateJWT, DelivererController.getDelivererById);
 
 // Protected routes
